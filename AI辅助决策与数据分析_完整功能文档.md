@@ -3,8 +3,8 @@
 > 系统名称: IMS 智能制造管控系统  
 > 核心架构: Python 数据模拟 → Kafka → Flink 实时处理 → Kafka → Spring Boot（规则引擎 + RAG + DeepSeek LLM）→ WebSocket / ClickHouse / MySQL  
 > 基础路径: `http://localhost:8080`  
-> 版本: v3.0  
-> 更新日期: 2026-05-04
+> 版本: v3.1  
+> 更新日期: 2026-05-06
 
 ---
 
@@ -12,6 +12,7 @@
 
 - [功能总览](#功能总览)
 - [一、实时异常检测与报警推送](#一实时异常检测与报警推送)
+- [一.五、秒级快速风险预测](#一五秒级快速风险预测)
 - [二、智能风险评分（混合决策引擎）](#二智能风险评分混合决策引擎)
 - [三、AI 自动创建维修工单](#三ai-自动创建维修工单)
 - [四、批次质量分析报告](#四批次质量分析报告)
@@ -69,17 +70,19 @@
             └─────────────────┘          └──────────────────┘  └──────────┘
 ```
 
-### 7大功能模块
+### 8大功能模块
 
 | 序号 | 功能模块 | 类型 | 数据来源 | AI 能力 |
 |------|---------|------|---------|---------|
 | 1 | 实时异常检测与报警 | 实时流处理 | Flink → Kafka | 阈值检测 + WebSocket 推送 |
+| 1.5 | **秒级快速风险预测** | 实时预警 | Flink 逐条处理 | 偏离度+趋势+波动+ETA 综合评分 |
 | 2 | 智能风险评分 | 实时决策 | Flink 1分钟聚合 | 规则引擎 + RAG + LLM 三级混合 |
 | 3 | AI 自动创建维修工单 | 自动处置 | 风险评分触发 | 自动诊断 → 自动开单 → 闭环管理 |
 | 4 | 批次质量分析报告 | 离线分析 | ClickHouse + MySQL | LLM 生成质量评级/根因/建议 |
 | 5 | 设备运行日报 + 维保建议 | 离线分析 | ClickHouse + MySQL | LLM 生成维保建议和紧急程度 |
 | 6 | AI 智能问答 | 交互查询 | MySQL (Text-to-SQL) | LLM 生成SQL + LLM 总结回答 |
 | 7 | 数据分析看板 | 统计展示 | MySQL 聚合 | 报警/生产/设备/维修 四维统计 |
+| 8 | **全流程溯源** | 质量追溯 | MySQL + ClickHouse | 正向/反向溯源，原料→成品全链路 |
 
 ### 8个传感器
 
@@ -151,6 +154,106 @@ ws://localhost:8080/ws/alarm
 |------|------|---------|
 | WARN | 警告 | 传感器值接近阈值边界 |
 | CRITICAL | 严重 | 传感器值明显超出标准范围 |
+
+### 1.4 异常自动计入不良品
+
+传感器分为两类，**只有逐瓶检测传感器的异常才自动计入不良品**：
+
+| 类型 | 传感器 | 异常含义 | 是否计入 bad_qty |
+|------|--------|---------|-----------------|
+| **逐瓶检测** | DEV00003(灌装容量)、DEV00004(称重)、DEV00005(贴标偏移)、DEV00006(旋盖扭矩) | 每条数据对应一瓶产品的质量检测，异常=该瓶不合格 | ✅ 自动 +1 |
+| **工艺环境** | DEV00001(糖度)、DEV00002(温度)、DEV00007(压力)、DEV00008(pH) | 环境/原料参数偏离，影响一段时间内的产品，不能确定具体哪瓶 | ❌ 只记录报警 |
+
+**执行流程**:
+```
+Flink 检测到异常 → Kafka(ims_alarm_event) → AlarmEventConsumer
+    │
+    ├─ WebSocket 推送前端
+    │
+    └─ 判断传感器类型
+        ├─ 逐瓶检测(VOLUME/WEIGHT/VISION/TORQUE)
+        │   └─ 查当前运行中批次(batch_status=1)
+        │       └─ bad_qty + 1 → 更新 mes_production_batch
+        │
+        └─ 工艺环境(BRIX/TEMP/PRESSURE/PH)
+            └─ 仅记录报警，不计不良品
+```
+
+**关于溯源粒度**：系统追溯到**批次级别**，这在实际生产中也是常见做法。对于逐瓶传感器的异常，报警记录中的时间戳可以定位到"哪个时刻生产的产品有问题"。
+
+---
+
+## 一.五、秒级快速风险预测
+
+### 1.5.1 功能说明
+
+**解决问题**：10秒一次的AI分析存在"预测真空期"，在两次分析之间可能已经出现异常趋势但未被预警。
+
+**数据链路**: Flink 逐条处理 IoT 数据 → `FastRiskFunction`(KeyedProcessFunction) → Kafka(`ims_fast_risk`) → `FastRiskConsumer` → WebSocket → 前端
+
+**仅对连续工艺型传感器生效**（`sensorCategory=PROCESS`）：DEV00001(糖度)、DEV00002(温度)、DEV00007(压力)、DEV00008(pH)。离散逐瓶型传感器（灌装/称重/视觉/扭矩）每瓶独立无趋势意义，不参与秒级预测。
+
+**评分模型**（纯规则，不调用LLM，零延迟）：
+
+| 维度 | 权重 | 说明 |
+|------|------|------|
+| 偏离度(d) | 35% | 当前值离工艺目标的相对距离，1=到达边界 |
+| 趋势速度(s) | 30% | EWMA平滑的秒级变化率（仅取逼近边界方向） |
+| 波动度(v) | 15% | 最近30秒滚动标准差 |
+| 触线预测(e) | 20% | 按当前速度预估多久触碰阈值(ETA) |
+
+**特殊规则**：当前值已超出阈值时，无论趋势如何强制 riskFast ≥ 0.9（高风险）。
+
+### 1.5.2 WebSocket 推送格式
+
+通过同一 WebSocket 端点 `ws://localhost:8080/ws/alarm` 推送，`type="fast_risk"`：
+
+```json
+{
+  "type": "fast_risk",
+  "deviceCode": "DEV00002",
+  "batchNo": "B20260505001",
+  "processType": "Temp",
+  "currentValue": 139.2,
+  "riskFast": 0.72,
+  "riskLevel": "MEDIUM",
+  "deviation": 0.88,
+  "slope": 0.0823,
+  "volatility": 0.1245,
+  "etaSeconds": 22.5,
+  "target": 137.0,
+  "minThreshold": 135.0,
+  "maxThreshold": 140.0,
+  "timestamp": 1746441600000
+}
+```
+
+### 1.5.3 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `riskFast` | Double | 快速风险分 0~1 |
+| `riskLevel` | String | `LOW`(0~0.6) / `MEDIUM`(0.6~0.8) / `HIGH`(0.8~1.0)，已防抖 |
+| `deviation` | Double | 偏离度 0~1 |
+| `slope` | Double | EWMA趋势斜率（正=上升，负=下降） |
+| `volatility` | Double | 30秒滚动标准差 |
+| `etaSeconds` | Double | 预计触线时间(秒)，-1=安全无趋势 |
+| `target` | Double | 工艺目标值 |
+| `minThreshold` / `maxThreshold` | Double | 工艺上下限 |
+
+### 1.5.4 防抖机制
+
+- 连续 **3秒** 满足升级条件才升级（LOW→MEDIUM 或 MEDIUM→HIGH）
+- 连续 **5秒** 回落才降级
+- 前端收到的 `riskLevel` 已是稳定值
+
+### 1.5.5 与其他通道对比
+
+| 通道 | WebSocket type | 频率 | 延迟 | 用途 |
+|------|---------------|------|------|------|
+| 异常报警 | `alarm` | 有异常才推 | <1s | 已超标通知 |
+| **秒级预警** | `fast_risk` | 每秒/设备(仅PROCESS类) | <1s | 趋势预测，提前预警 |
+| AI深度分析 | `ai_analysis` | 10秒/设备 | 10s+LLM | 根因分析+建议 |
 
 ---
 
@@ -328,9 +431,11 @@ GET /ai/decisions?decisionType=RULE      -- 决策日志
 
 **数据来源**: ClickHouse（IoT 历史数据按批次聚合统计）+ MySQL（批次信息/告警记录/工艺标准）+ DeepSeek LLM 生成质量报告
 
+**分析视角**: 以**产品质量**为核心，关注良率、过程能力(CPK)、质量一致性。设备/传感器数据作为AI分析的内部参考输入，不直接暴露给前端。
+
 **分析维度**:
-- 8 个传感器的统计指标：均值、标准差、最大最小值、超标率、CPK（过程能力指数）
 - 批次产量和良率
+- 各工序对产品的质量影响（CPK、超标率）
 - 报警分布
 - AI 质量评级（A/B/C/D）、根因分析、改善建议
 
@@ -352,6 +457,8 @@ GET /batch-quality/report/{batchNo}
   "code": 1,
   "data": {
     "batchNo": "B20260413001",
+    "orderNo": "WO20260413001",
+    "productName": "鲜橙多500ml",
     "targetQty": 5000,
     "actualQty": 4980,
     "badQty": 15,
@@ -359,34 +466,54 @@ GET /batch-quality/report/{batchNo}
     "batchStatus": "已停止",
     "startTime": "2026-04-13 08:00:00",
     "endTime": "2026-04-13 16:30:00",
-    "stationStatsList": [
+    "durationMinutes": 510,
+    "overallCpk": 1.85,
+    "cpkPassCount": 4,
+    "cpkFailCount": 0,
+    "bestStationCode": "1号灌装机",
+    "worstStationCode": "调配罐",
+    "processQualityList": [
       {
-        "deviceCode": "DEV00001",
+        "processName": "灌装",
+        "processType": "FILLING",
+        "equipName": "1号灌装机",
+        "cpk": 1.92,
+        "cpkLevel": "优秀",
+        "outOfRangeRate": 0.08,
+        "alarmCount": 1,
+        "qualityImpact": "产品质量稳定，该工序表现优秀"
+      },
+      {
+        "processName": "调配",
         "processType": "MIXING",
-        "parameterName": "糖度(Brix)",
-        "unit": "°Bx",
-        "targetValue": 11.5,
-        "minThreshold": 11.0,
-        "maxThreshold": 12.0,
-        "mean": 11.52,
-        "stdDev": 0.058,
-        "maxVal": 11.68,
-        "minVal": 11.35,
-        "sampleCount": 9600,
-        "outOfRangeCount": 12,
-        "outOfRangeRate": 0.13,
-        "cpk": 2.87
+        "equipName": "调配罐",
+        "cpk": 1.45,
+        "cpkLevel": "优秀",
+        "outOfRangeRate": 0.05,
+        "alarmCount": 0,
+        "qualityImpact": "产品质量稳定，该工序表现优秀"
+      },
+      {
+        "processName": "杀菌",
+        "processType": "STERILIZATION",
+        "equipName": "杀菌机",
+        "cpk": 1.12,
+        "cpkLevel": "良好",
+        "outOfRangeRate": 0.15,
+        "alarmCount": 2,
+        "qualityImpact": "基本达标，但有2次异常波动可能影响部分产品"
       }
     ],
     "totalAlarmCount": 3,
     "alarmDistribution": [
-      { "deviceCode": "DEV00002", "processType": "STERILIZATION", "alarmCount": 2 }
+      { "deviceCode": "DEV00002", "processType": "STERILIZATION", "alarmCount": 2, "alarmLevel": "CRITICAL" }
     ],
     "qualityGrade": "A",
     "qualityScore": 92.5,
-    "aiReportSummary": "本批次整体质量优良，8个关键工艺参数中7个CPK>1.33...",
-    "aiRootCauseAnalysis": "温度传感器DEV00002在14:20出现短暂超标，疑热交换器受料温影响...",
+    "aiReportSummary": "本批次产品整体质量优良，良率99.70%。灌装工序过程能力突出(CPK=1.92)，调配工序双参数均达优秀。杀菌工序有2次温度波动但未影响产品合格率...",
+    "aiRootCauseAnalysis": "杀菌机在14:20出现短暂温度超标，疑热交换器受料温影响...",
     "aiImprovementSuggestion": "1. 建议检查杀菌段热交换器清洁周期\n2. 适当放宽温度响应阈值...",
+    "aiRiskHighlights": "杀菌工序温度CPK偏低;旋盖扭矩波动增大趋势;灌装段午间有4次超标集中",
     "reportTime": "2026-05-04 10:30:00"
   }
 }
@@ -396,12 +523,26 @@ GET /batch-quality/report/{batchNo}
 
 | 字段 | 说明 |
 |------|------|
-| cpk | 过程能力指数: >1.33 优秀, 1.0~1.33 一般, <1.0 不足 |
+| processQualityList | 各工序对产品的质量影响概览（以产品视角） |
 | qualityGrade | AI 质量评级: A(优秀≥90), B(良好≥75), C(一般≥60), D(不合格<60) |
 | qualityScore | AI 综合评分 0~100 |
-| aiReportSummary | AI 生成的质量总评 |
+| aiReportSummary | AI 生成的产品质量总评 |
 | aiRootCauseAnalysis | AI 异常根因分析 |
 | aiImprovementSuggestion | AI 改善建议 |
+| aiRiskHighlights | 关键风险点列举 |
+
+**ProcessQualityItem 字段:**
+
+| 字段 | 说明 |
+|------|------|
+| processName | 工序中文名(调配/杀菌/灌装/旋盖/贴标/充气) |
+| processType | 工序类型编码 |
+| equipName | 该工序对应的生产设备名称 |
+| cpk | 工序综合CPK(短板效应：取最差传感器) |
+| cpkLevel | 优秀/良好/待改善/不合格 |
+| outOfRangeRate | 工序超标率(%) |
+| alarmCount | 该工序报警次数 |
+| qualityImpact | 对产品质量的影响评价(一句话) |
 
 #### 4.2.2 查询批次时序数据（折线图）
 
@@ -436,9 +577,10 @@ DELETE /batch-quality/cache/{batchNo}
 
 **数据来源**: ClickHouse（指定日期的 IoT 聚合统计）+ MySQL（设备档案/维修历史/告警记录）+ DeepSeek LLM 生成维保建议
 
-**输出内容**:
-- 8 台传感器当日运行摘要（采样数、均值、标准差、超标率、健康评分、趋势）
-- 报警 Top 排名
+**输出内容**（以生产设备为维度）:
+- 各生产设备(主机)当日运行摘要：健康评分、告警次数、趋势、运行天数
+- 每台设备下挂载的传感器数据详情
+- 报警 Top 设备排名
 - AI 产线全局日评（文字总结）
 - AI 维保建议（逐台设备，含紧急程度和建议维护时间）
 
@@ -461,38 +603,101 @@ GET /device-report/daily?date=2026-05-03
   "data": {
     "reportDate": "2026-05-03",
     "generateTime": "2026-05-04 09:00:00",
-    "deviceSummaries": [
+    "equipmentSummaries": [
       {
-        "deviceCode": "DEV00001",
-        "deviceType": "BRIX",
-        "equipName": "糖度检测仪",
-        "sampleCount": 86400,
-        "mean": 11.51,
-        "stdDev": 0.062,
-        "outOfRangeRate": 0.08,
-        "alarmCount": 1,
-        "healthScore": 95.2,
+        "equipCode": "EQ001",
+        "equipName": "1号灌装机",
+        "processType": "FILLING",
+        "alarmCount": 2,
+        "healthScore": 91.0,
         "trend": "STABLE",
-        "runningDays": 120
+        "runningDays": 120,
+        "sensorSummaries": [
+          {
+            "deviceCode": "DEV00003",
+            "deviceType": "VOLUME",
+            "sampleCount": 86400,
+            "mean": 500.12,
+            "stdDev": 0.87,
+            "outOfRangeRate": 0.05,
+            "alarmCount": 1,
+            "healthScore": 94.8
+          },
+          {
+            "deviceCode": "DEV00004",
+            "deviceType": "WEIGHT",
+            "sampleCount": 86400,
+            "mean": 520.5,
+            "stdDev": 1.2,
+            "outOfRangeRate": 0.08,
+            "alarmCount": 1,
+            "healthScore": 91.0
+          }
+        ]
+      },
+      {
+        "equipCode": "EQ002",
+        "equipName": "调配罐",
+        "processType": "MIXING",
+        "alarmCount": 5,
+        "healthScore": 82.5,
+        "trend": "DOWN",
+        "runningDays": 450,
+        "sensorSummaries": [
+          {
+            "deviceCode": "DEV00001",
+            "deviceType": "BRIX",
+            "sampleCount": 86400,
+            "mean": 11.51,
+            "stdDev": 0.062,
+            "outOfRangeRate": 0.08,
+            "alarmCount": 3,
+            "healthScore": 82.5
+          },
+          {
+            "deviceCode": "DEV00008",
+            "deviceType": "PH",
+            "sampleCount": 86400,
+            "mean": 3.48,
+            "stdDev": 0.045,
+            "outOfRangeRate": 0.03,
+            "alarmCount": 2,
+            "healthScore": 88.5
+          }
+        ]
       }
     ],
     "alarmTopDevices": [
       {
-        "deviceCode": "DEV00002",
-        "deviceType": "TEMP",
+        "equipCode": "EQ002",
+        "equipName": "调配罐",
+        "alarmCount": 5,
+        "topAlarmMsg": "糖度超上限: 当前值 12.05°Bx, 标准范围 [11.0~12.0]"
+      },
+      {
+        "equipCode": "EQ003",
+        "equipName": "杀菌机",
         "alarmCount": 3,
         "topAlarmMsg": "温度超上限: 当前值 141.2℃, 标准范围 [135~140]"
       }
     ],
-    "aiDailyOverview": "产线整体运行平稳，8台传感器中7台健康评分>90分...",
+    "aiDailyOverview": "产线整体运行平稳，6台设备中5台健康评分>90分。调配罐(EQ002)告警5次需重点关注，已运行450天建议安排保养...",
     "maintenanceSuggestions": [
       {
-        "deviceCode": "DEV00002",
-        "equipName": "杀菌温控仪",
+        "equipCode": "EQ002",
+        "equipName": "调配罐",
+        "urgency": "MEDIUM",
+        "suggestion": "建议检查糖度在线检测仪校准状态，清洁搅拌桨叶防止沉积影响均匀度",
+        "suggestedTime": "本周末停机时",
+        "reason": "昨日糖度超标率0.08%且连续3次报警，设备已运行450天超过保养周期"
+      },
+      {
+        "equipCode": "EQ003",
+        "equipName": "杀菌机",
         "urgency": "HIGH",
         "suggestion": "建议立即检查热交换器清洁状态，校验温控PID参数",
-        "suggestedTime": "2026-05-04",
-        "reason": "昨日超标率0.15%且连续3次报警，健康评分较前日下降8分"
+        "suggestedTime": "今晚停机后",
+        "reason": "温度连续3次报警且健康评分下降至85分，存在产品安全风险"
       }
     ]
   }
@@ -503,10 +708,12 @@ GET /device-report/daily?date=2026-05-03
 
 | 字段 | 说明 |
 |------|------|
-| healthScore | 运行健康评分 0~100 |
+| equipmentSummaries | 各生产设备(主机)运行摘要列表 |
+| healthScore | 设备运行健康评分 0~100 (取挂载传感器最低分) |
 | trend | 相比前一日: UP(变好) / DOWN(变差) / STABLE(稳定) |
-| urgency | 紧急程度: HIGH(立即处理) / MEDIUM(近期安排) / LOW(计划保养) |
-| suggestedTime | AI 建议的维护日期 |
+| sensorSummaries | 该设备下挂载的传感器详细数据 |
+| urgency | 紧急程度: HIGH(24h内处理) / MEDIUM(本周内) / LOW(计划保养) |
+| suggestedTime | AI 建议的维护时间 |
 | aiDailyOverview | AI 产线全局日评 |
 
 #### 5.2.2 生成今日日报
@@ -540,7 +747,7 @@ GET /device-report/daily/latest
 
 ### 6.2 支持查询的数据表
 
-Prompt 中内嵌了 8 张核心表结构及其关联关系：
+Prompt 中内嵌了 11 张核心表结构及其关联关系：
 
 | 表名 | 说明 | 示例问题 |
 |------|------|---------|
@@ -552,6 +759,9 @@ Prompt 中内嵌了 8 张核心表结构及其关联关系：
 | mes_production_batch | 生产批次 | "昨天的批次产量和良率是多少？" |
 | mes_product_stock | 产成品库存 | "当前库存最多的产品是什么？" |
 | mes_decision_log | AI决策日志 | "AI做了多少次高风险判决？" |
+| mes_material | 物料基础信息 | "系统有多少种原材料？" |
+| mes_material_stock | 原材料/物料库存 | "哪些物料库存低？" |
+| mes_receipt | 原材料进货批次 | "最近进货的是什么物料？" |
 
 ### 6.3 接口
 
@@ -817,7 +1027,7 @@ Content-Type: application/json
 
 | 序号 | 方法 | 路径 | 功能模块 | 说明 |
 |------|------|------|---------|------|
-| 1 | WS | `ws://localhost:8080/ws/alarm` | 实时推送 | WebSocket 报警 + AI 分析推送 |
+| 1 | WS | `ws://localhost:8080/ws/alarm` | 实时推送 | WebSocket 报警 + 秒级预警 + AI 分析推送 |
 | 2 | POST | `/ai/analyze` | 风险评分 | 手动触发 AI 分析 |
 | 3 | GET | `/ai/latest/{deviceCode}` | 风险评分 | 查询最近分析结果(Redis) |
 | 4 | GET | `/ai/history` | 风险评分 | 分页查询分析历史 |
@@ -832,6 +1042,8 @@ Content-Type: application/json
 | 13 | GET | `/dashboard/production-stats` | 数据看板 | 生产统计 |
 | 14 | GET | `/dashboard/equipment-overview` | 数据看板 | 设备状态总览 |
 | 15 | GET | `/dashboard/repair-stats` | 数据看板 | 维修工单统计 |
+| 16 | GET | `/traceability/backward?batchNo=` | 全流程溯源 | 反向溯源(成品→原料) |
+| 17 | GET | `/traceability/forward?lotNo=` | 全流程溯源 | 正向溯源(原料→成品) |
 
 ### 管理配置接口
 
@@ -852,7 +1064,7 @@ Content-Type: application/json
 | 28 | POST | `/ai/model-configs` | 模型配置 | 新增/修改模型 |
 | 29 | POST | `/ai/model-configs/{id}/activate` | 模型配置 | 激活指定模型 |
 
-**共计 29 个接口 + 1 个 WebSocket 端点，覆盖 7 大 AI 功能模块。**
+**共计 29 个接口 + 1 个 WebSocket 端点（含3种消息类型: alarm/fast_risk/ai_analysis），覆盖 8 大功能模块。**
 
 ---
 
@@ -862,7 +1074,7 @@ Content-Type: application/json
 |------|------|------|
 | 数据模拟 | Python | 8 传感器模拟数据生成（1秒/条，独立随机游走，0.1%异常率） |
 | 消息队列 | Kafka | IoT 数据传输、异常事件传输、健康统计传输 |
-| 实时计算 | Apache Flink | 异常检测、1分钟窗口聚合、ClickHouse 写入 |
+| 实时计算 | Apache Flink | 异常检测、秒级风险预测、1分钟窗口聚合、ClickHouse 写入 |
 | 时序存储 | ClickHouse | IoT 原始数据存储，支持高速聚合查询 |
 | 业务数据库 | MySQL | 设备/工单/批次/报警/决策日志等业务表 |
 | 缓存 | Redis | AI 分析结果缓存、Flink 批次号查询 |

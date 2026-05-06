@@ -103,6 +103,9 @@
             <el-menu-item index="/ai/batch-quality">
               <span>批次质量报告</span>
             </el-menu-item>
+            <el-menu-item index="/ai/traceability">
+              <span>全流程溯源</span>
+            </el-menu-item>
             <el-menu-item index="/ai/device-report">
               <span>设备运行日报</span>
             </el-menu-item>
@@ -262,6 +265,7 @@ const currentRoute = computed(() => {
     '/ai/rules': '规则配置',
     '/ai/settings': '模型配置',
     '/ai/batch-quality': '批次质量报告',
+    '/ai/traceability': '全流程溯源',
     '/ai/device-report': '设备运行日报',
   }
   if (route.path.startsWith('/base/wms/')) {

@@ -212,6 +212,7 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleAddPutAwayPlan">加入上架清单</el-button>
+          <el-button @click="handlePutAwayAll">全部入库</el-button>
         </el-form-item>
       </el-form>
 
@@ -584,32 +585,36 @@ const handleAddPutAwayPlan = async () => {
   await putAwayFormRef.value.validate((valid) => {
     if (!valid) return
 
-    if (putAwayForm.quantity <= 0) {
-      ElMessage.error('入库数量必须大于0')
-      return
-    }
-
-    if (putAwayForm.quantity > remainingPlannableQuantity.value) {
-      ElMessage.error(`入库数量超出可分配数量，当前可分配: ${remainingPlannableQuantity.value}`)
-      return
-    }
-
-    const wh = warehouseList.value.find((item) => item.whId === putAwayForm.whId)
-    const loc = putAwayLocationList.value.find((item) => item.locId === putAwayForm.locId)
-
-    putAwayPlanList.value.push({
-      whId: putAwayForm.whId,
-      whName: wh?.whName || putAwayForm.whId,
-      locId: putAwayForm.locId,
-      locCode: loc?.locCode || putAwayForm.locId,
-      quantity: putAwayForm.quantity,
-    })
-
-    putAwayForm.whId = ''
-    putAwayForm.locId = ''
-    putAwayForm.quantity = 0
-    putAwayLocationList.value = []
+    appendPutAwayPlan(putAwayForm.quantity)
   })
+}
+
+const appendPutAwayPlan = (quantity: number) => {
+  if (quantity <= 0) {
+    ElMessage.error('入库数量必须大于0')
+    return
+  }
+
+  if (quantity > remainingPlannableQuantity.value) {
+    ElMessage.error(`入库数量超出可分配数量，当前可分配: ${remainingPlannableQuantity.value}`)
+    return
+  }
+
+  const wh = warehouseList.value.find((item) => item.whId === putAwayForm.whId)
+  const loc = putAwayLocationList.value.find((item) => item.locId === putAwayForm.locId)
+
+  putAwayPlanList.value.push({
+    whId: putAwayForm.whId,
+    whName: wh?.whName || putAwayForm.whId,
+    locId: putAwayForm.locId,
+    locCode: loc?.locCode || putAwayForm.locId,
+    quantity,
+  })
+
+  putAwayForm.whId = ''
+  putAwayForm.locId = ''
+  putAwayForm.quantity = 0
+  putAwayLocationList.value = []
 }
 
 const removePutAwayPlan = (index: number) => {
@@ -689,6 +694,28 @@ const handleShipSubmit = async () => {
       shipSubmitting.value = false
     }
   })
+}
+
+const handlePutAwayAll = () => {
+  if (!currentPending.value) return
+
+  if (!putAwayForm.whId) {
+    ElMessage.error('请先选择目标仓库')
+    return
+  }
+
+  if (!putAwayForm.locId) {
+    ElMessage.error('请先选择目标库位')
+    return
+  }
+
+  const remaining = remainingPlannableQuantity.value
+  if (remaining <= 0) {
+    ElMessage.error('当前没有可入库数量')
+    return
+  }
+
+  appendPutAwayPlan(remaining)
 }
 
 onMounted(() => {

@@ -143,6 +143,11 @@ const router = createRouter({
           component: () => import('@/views/AiDeviceReport.vue'),
         },
         {
+          path: 'ai/traceability',
+          name: 'AiTraceability',
+          component: () => import('@/views/AiTraceability.vue'),
+        },
+        {
           path: 'base/wms',
           name: 'WmsManagement',
           component: () => import('@/views/WmsManagement.vue'),
