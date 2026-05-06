@@ -141,7 +141,9 @@ export function getBatchQualityReport(batchNo: string) {
 }
 
 export function getBatchQualityTimeSeries(batchNo: string, device: string) {
-  return request.get<ApiResponse<BatchTimeSeriesPoint[]>>(`/batch-quality/timeseries/${batchNo}/${device}`)
+  return request.get<ApiResponse<BatchTimeSeriesPoint[]>>(
+    `/batch-quality/timeseries/${batchNo}/${device}`,
+  )
 }
 
 export function clearBatchQualityCache(batchNo: string) {

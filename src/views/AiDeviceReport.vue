@@ -1,6 +1,10 @@
 <template>
   <div class="container">
-    <el-card class="box-card" v-loading="loading" element-loading-text="AI 正在分析，请稍候（约5-15秒）...">
+    <el-card
+      class="box-card"
+      v-loading="loading"
+      element-loading-text="AI 正在分析，请稍候（约5-15秒）..."
+    >
       <template #header>
         <div class="card-header">
           <span>设备运行日报 + AI 维保建议</span>
@@ -47,24 +51,38 @@
           <el-table :data="equipmentSummaries" stripe border style="width: 100%">
             <el-table-column type="expand" width="40">
               <template #default="{ row }">
-                <el-table :data="row.sensorSummaries || []" stripe border style="width: 100%" size="small">
+                <el-table
+                  :data="row.sensorSummaries || []"
+                  stripe
+                  border
+                  style="width: 100%"
+                  size="small"
+                >
                   <el-table-column prop="deviceCode" label="传感器编码" min-width="120" />
                   <el-table-column prop="deviceType" label="类型" min-width="100" />
                   <el-table-column prop="sampleCount" label="采样数" width="100" />
                   <el-table-column label="均值" width="100">
-                    <template #default="{ row: sensor }">{{ formatNumber(sensor.mean, 3) }}</template>
+                    <template #default="{ row: sensor }">{{
+                      formatNumber(sensor.mean, 3)
+                    }}</template>
                   </el-table-column>
                   <el-table-column label="标准差" width="100">
-                    <template #default="{ row: sensor }">{{ formatNumber(sensor.stdDev, 3) }}</template>
+                    <template #default="{ row: sensor }">{{
+                      formatNumber(sensor.stdDev, 3)
+                    }}</template>
                   </el-table-column>
                   <el-table-column label="超标率" width="110">
                     <template #default="{ row: sensor }">
-                      <span :class="outRateClass(sensor.outOfRangeRate)">{{ formatPercent(sensor.outOfRangeRate) }}</span>
+                      <span :class="outRateClass(sensor.outOfRangeRate)">{{
+                        formatPercent(sensor.outOfRangeRate)
+                      }}</span>
                     </template>
                   </el-table-column>
                   <el-table-column label="告警数" width="90">
                     <template #default="{ row: sensor }">
-                      <span :class="{ 'danger-text': Number(sensor.alarmCount) > 0 }">{{ sensor.alarmCount }}</span>
+                      <span :class="{ 'danger-text': Number(sensor.alarmCount) > 0 }">{{
+                        sensor.alarmCount
+                      }}</span>
                     </template>
                   </el-table-column>
                   <el-table-column label="健康评分" width="220">
@@ -90,7 +108,9 @@
             </el-table-column>
             <el-table-column label="告警数" width="90">
               <template #default="{ row }">
-                <span :class="{ 'danger-text': Number(row.alarmCount) > 0 }">{{ row.alarmCount }}</span>
+                <span :class="{ 'danger-text': Number(row.alarmCount) > 0 }">{{
+                  row.alarmCount
+                }}</span>
               </template>
             </el-table-column>
             <el-table-column label="健康评分" width="220">

@@ -17,7 +17,9 @@
         <el-button type="primary" :loading="loading" @click="handleGenerate">
           {{ loading ? '正在生成...' : '生成报告' }}
         </el-button>
-        <el-button :disabled="!searchForm.batchNo || loading" @click="handleClearCache">清除缓存</el-button>
+        <el-button :disabled="!searchForm.batchNo || loading" @click="handleClearCache"
+          >清除缓存</el-button
+        >
       </div>
 
       <el-alert
@@ -45,13 +47,27 @@
             <span>批次概览</span>
           </template>
           <el-descriptions :column="3" border>
-            <el-descriptions-item label="批次号">{{ basicInfo.batchNo || searchForm.batchNo }}</el-descriptions-item>
-            <el-descriptions-item label="工单号">{{ basicInfo.orderNo || basicInfo.woNo || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="产品">{{ basicInfo.productName || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="计划产量">{{ formatNumber(basicInfo.targetQty) }}</el-descriptions-item>
-            <el-descriptions-item label="产量">{{ formatNumber(basicInfo.actualQty) }}</el-descriptions-item>
-            <el-descriptions-item label="良品">{{ formatNumber(basicInfo.goodQty) }}</el-descriptions-item>
-            <el-descriptions-item label="不良品">{{ formatNumber(basicInfo.badQty) }}</el-descriptions-item>
+            <el-descriptions-item label="批次号">{{
+              basicInfo.batchNo || searchForm.batchNo
+            }}</el-descriptions-item>
+            <el-descriptions-item label="工单号">{{
+              basicInfo.orderNo || basicInfo.woNo || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="产品">{{
+              basicInfo.productName || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="计划产量">{{
+              formatNumber(basicInfo.targetQty)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="产量">{{
+              formatNumber(basicInfo.actualQty)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="良品">{{
+              formatNumber(basicInfo.goodQty)
+            }}</el-descriptions-item>
+            <el-descriptions-item label="不良品">{{
+              formatNumber(basicInfo.badQty)
+            }}</el-descriptions-item>
             <el-descriptions-item label="生产时长">
               {{ formatDuration(basicInfo.durationMinutes) }}
             </el-descriptions-item>
@@ -61,9 +77,12 @@
             <el-descriptions-item label="状态">
               <el-tag>{{ basicInfo.batchStatusLabel || basicInfo.batchStatus || '-' }}</el-tag>
             </el-descriptions-item>
-            <el-descriptions-item label="综合CPK">{{ formatNumber(basicInfo.overallCpk) }}</el-descriptions-item>
+            <el-descriptions-item label="综合CPK">{{
+              formatNumber(basicInfo.overallCpk)
+            }}</el-descriptions-item>
             <el-descriptions-item label="CPK达标/不达标">
-              {{ formatNumber(basicInfo.cpkPassCount) }} / {{ formatNumber(basicInfo.cpkFailCount) }}
+              {{ formatNumber(basicInfo.cpkPassCount) }} /
+              {{ formatNumber(basicInfo.cpkFailCount) }}
             </el-descriptions-item>
             <el-descriptions-item label="最佳/最差设备">
               {{ basicInfo.bestStationCode || '-' }} / {{ basicInfo.worstStationCode || '-' }}
@@ -126,7 +145,9 @@
                   <el-tag :type="gradeTagType(aiAssessment.grade)" size="large">
                     评级 {{ aiAssessment.grade || '-' }}
                   </el-tag>
-                  <div class="ai-score-text">综合评分 {{ formatNumber(aiAssessment.score) }}/100</div>
+                  <div class="ai-score-text">
+                    综合评分 {{ formatNumber(aiAssessment.score) }}/100
+                  </div>
                 </div>
                 <el-progress
                   :percentage="normalizeScore(aiAssessment.score)"
@@ -142,7 +163,10 @@
                   </el-descriptions-item>
                   <el-descriptions-item label="改善建议">
                     <ul class="suggestion-list">
-                      <li v-for="(item, index) in aiAssessment.suggestions" :key="`${item}-${index}`">
+                      <li
+                        v-for="(item, index) in aiAssessment.suggestions"
+                        :key="`${item}-${index}`"
+                      >
                         {{ item }}
                       </li>
                       <li v-if="!aiAssessment.suggestions?.length">-</li>
@@ -219,18 +243,19 @@
       </div>
     </el-card>
 
-    <el-drawer
-      v-model="timeSeriesVisible"
-      title="原始时序数据"
-      size="52%"
-      :destroy-on-close="true"
-    >
+    <el-drawer v-model="timeSeriesVisible" title="原始时序数据" size="52%" :destroy-on-close="true">
       <div class="drawer-top">
         <div>批次：{{ searchForm.batchNo }}</div>
         <div>设备：{{ currentDevice }}</div>
       </div>
 
-      <el-table :data="timeSeriesList" stripe border v-loading="timeSeriesLoading" style="width: 100%">
+      <el-table
+        :data="timeSeriesList"
+        stripe
+        border
+        v-loading="timeSeriesLoading"
+        style="width: 100%"
+      >
         <el-table-column prop="ts" label="时间戳" min-width="170">
           <template #default="{ row }">{{ formatTimestamp(row.ts) }}</template>
         </el-table-column>
@@ -419,9 +444,7 @@ const toNumber = (value: unknown) => {
 
 const splitToList = (value: unknown) => {
   if (Array.isArray(value)) {
-    return value
-      .map((item) => String(item || '').trim())
-      .filter((item) => item.length > 0)
+    return value.map((item) => String(item || '').trim()).filter((item) => item.length > 0)
   }
   if (typeof value !== 'string') return []
   return value
@@ -535,7 +558,10 @@ const sanitizeAlarmDistribution = (source: unknown): BatchAlarmDistribution[] =>
 const sanitizeReport = (raw: BatchQualityReportRaw | BatchQualityReport): BatchQualityReport => {
   const reportRaw = raw as BatchQualityReportRaw
   const normalizedFromFlat = Boolean(
-    reportRaw.batchNo || reportRaw.stationStatsList || reportRaw.equipmentStatsList || reportRaw.processQualityList,
+    reportRaw.batchNo ||
+    reportRaw.stationStatsList ||
+    reportRaw.equipmentStatsList ||
+    reportRaw.processQualityList,
   )
 
   if (normalizedFromFlat) {
