@@ -15,7 +15,7 @@
           format="YYYY-MM-DD"
           placeholder="选择日报日期"
           :disabled-date="disabledDate"
-          clearable="false"
+          :clearable="false"
           class="date-picker"
         />
         <el-button type="primary" :loading="loading" @click="handleGenerateByDate">
@@ -42,27 +42,55 @@
 
         <el-card shadow="never" class="section-card">
           <template #header>
-            <span>设备运行概况（{{ deviceSummaries.length }} 台）</span>
+            <span>设备运行概况（{{ equipmentSummaries.length }} 台）</span>
           </template>
-          <el-table :data="deviceSummaries" stripe border style="width: 100%">
-            <el-table-column prop="deviceCode" label="设备编码" width="120" />
-            <el-table-column prop="equipName" label="设备名称" min-width="140" />
-            <el-table-column prop="deviceType" label="类型" width="100" />
-            <el-table-column prop="sampleCount" label="采样数" width="110" />
-            <el-table-column label="均值" width="110">
-              <template #default="{ row }">{{ formatNumber(row.mean, 3) }}</template>
-            </el-table-column>
-            <el-table-column label="标准差" width="110">
-              <template #default="{ row }">{{ formatNumber(row.stdDev, 3) }}</template>
-            </el-table-column>
-            <el-table-column label="超标率" width="110">
+          <el-table :data="equipmentSummaries" stripe border style="width: 100%">
+            <el-table-column type="expand" width="40">
               <template #default="{ row }">
-                <span :class="outRateClass(row.outOfRangeRate)">{{ formatPercent(row.outOfRangeRate) }}</span>
+                <el-table :data="row.sensorSummaries || []" stripe border style="width: 100%" size="small">
+                  <el-table-column prop="deviceCode" label="传感器编码" min-width="120" />
+                  <el-table-column prop="deviceType" label="类型" min-width="100" />
+                  <el-table-column prop="sampleCount" label="采样数" width="100" />
+                  <el-table-column label="均值" width="100">
+                    <template #default="{ row: sensor }">{{ formatNumber(sensor.mean, 3) }}</template>
+                  </el-table-column>
+                  <el-table-column label="标准差" width="100">
+                    <template #default="{ row: sensor }">{{ formatNumber(sensor.stdDev, 3) }}</template>
+                  </el-table-column>
+                  <el-table-column label="超标率" width="110">
+                    <template #default="{ row: sensor }">
+                      <span :class="outRateClass(sensor.outOfRangeRate)">{{ formatPercent(sensor.outOfRangeRate) }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="告警数" width="90">
+                    <template #default="{ row: sensor }">
+                      <span :class="{ 'danger-text': Number(sensor.alarmCount) > 0 }">{{ sensor.alarmCount }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="健康评分" width="220">
+                    <template #default="{ row: sensor }">
+                      <div class="health-cell">
+                        <el-progress
+                          :percentage="normalizeScore(sensor.healthScore)"
+                          :stroke-width="14"
+                          :color="healthColor(sensor.healthScore)"
+                        />
+                        <span class="health-value">{{ formatNumber(sensor.healthScore, 1) }}</span>
+                      </div>
+                    </template>
+                  </el-table-column>
+                </el-table>
               </template>
+            </el-table-column>
+            <el-table-column prop="equipCode" label="设备编码" width="140" />
+            <el-table-column prop="equipName" label="设备名称" min-width="140" />
+            <el-table-column prop="processType" label="工序" width="130" />
+            <el-table-column label="传感器数" width="100">
+              <template #default="{ row }">{{ (row.sensorSummaries || []).length }}</template>
             </el-table-column>
             <el-table-column label="告警数" width="90">
               <template #default="{ row }">
-                <span :class="{ 'danger-text': row.alarmCount > 0 }">{{ row.alarmCount }}</span>
+                <span :class="{ 'danger-text': Number(row.alarmCount) > 0 }">{{ row.alarmCount }}</span>
               </template>
             </el-table-column>
             <el-table-column label="健康评分" width="220">
@@ -101,15 +129,15 @@
                 <el-collapse>
                   <el-collapse-item
                     v-for="item in sortedSuggestions"
-                    :key="`${item.deviceCode}-${item.suggestedTime}`"
-                    :name="`${item.deviceCode}-${item.suggestedTime}`"
+                    :key="`${item.equipCode}-${item.suggestedTime}`"
+                    :name="`${item.equipCode}-${item.suggestedTime}`"
                   >
                     <template #title>
                       <div class="suggestion-title">
                         <el-tag :type="urgencyTagType(item.urgency)">
                           {{ urgencyLabel(item.urgency) }}
                         </el-tag>
-                        <span>{{ item.equipName }}（{{ item.deviceCode }}）</span>
+                        <span>{{ item.equipName }}（{{ item.equipCode }}）</span>
                         <span class="suggest-time">建议时间：{{ item.suggestedTime || '-' }}</span>
                       </div>
                     </template>
@@ -134,12 +162,12 @@
               <el-timeline v-else>
                 <el-timeline-item
                   v-for="(item, idx) in alarmTopDevices"
-                  :key="`${item.deviceCode}-${idx}`"
+                  :key="`${item.equipCode}-${idx}`"
                   :type="idx === 0 ? 'danger' : 'primary'"
                 >
                   <div class="alarm-item-head">
-                    <strong>{{ item.deviceCode }}</strong>
-                    <el-tag size="small">{{ item.deviceType }}</el-tag>
+                    <strong>{{ item.equipCode }}</strong>
+                    <el-tag size="small">{{ item.equipName }}</el-tag>
                     <span class="danger-text">{{ item.alarmCount }}次</span>
                   </div>
                   <div class="alarm-msg">{{ item.topAlarmMsg || '-' }}</div>
@@ -160,7 +188,7 @@ import {
   getTodayDeviceDailyReport,
   type DeviceAlarmTopItem,
   type DeviceDailyReport,
-  type DeviceDailySummary,
+  type DeviceEquipmentSummary,
   type DeviceMaintenanceSuggestion,
   type DeviceTrend,
   type DeviceUrgency,
@@ -173,8 +201,21 @@ const report = ref<DeviceDailyReport | null>(null)
 const emptyTip = ref('暂无日报，请选择日期后生成')
 const selectedDate = ref(getYesterday())
 
-const deviceSummaries = computed<DeviceDailySummary[]>(() => {
-  return report.value?.deviceSummaries || []
+const equipmentSummaries = computed<DeviceEquipmentSummary[]>(() => {
+  const latest = report.value?.equipmentSummaries
+  if (Array.isArray(latest) && latest.length) return latest
+
+  const legacy = report.value?.deviceSummaries || []
+  return legacy.map((item) => ({
+    equipCode: item.deviceCode,
+    equipName: item.deviceCode,
+    processType: '-',
+    alarmCount: item.alarmCount,
+    healthScore: item.healthScore,
+    trend: 'STABLE',
+    runningDays: '-',
+    sensorSummaries: [item],
+  }))
 })
 
 const alarmTopDevices = computed<DeviceAlarmTopItem[]>(() => {
@@ -217,34 +258,36 @@ function disabledDate(time: Date) {
   return day.getTime() > today.getTime() || day.getTime() < min.getTime()
 }
 
-function normalizeScore(score: number) {
-  if (Number.isNaN(score)) return 0
-  if (score < 0) return 0
-  if (score > 100) return 100
-  return Number(score.toFixed(1))
+function normalizeScore(score: number | string) {
+  const value = Number(score)
+  if (Number.isNaN(value)) return 0
+  if (value < 0) return 0
+  if (value > 100) return 100
+  return Number(value.toFixed(1))
 }
 
-function healthColor(score: number) {
-  if (score >= 90) return '#67c23a'
-  if (score >= 70) return '#e6a23c'
+function healthColor(score: number | string) {
+  const value = Number(score)
+  if (value >= 90) return '#67c23a'
+  if (value >= 70) return '#e6a23c'
   return '#f56c6c'
 }
 
-function formatNumber(value: number, digits = 2) {
+function formatNumber(value: number | string, digits = 2) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return '-'
   return Number(value).toFixed(digits)
 }
 
-function formatPercent(value: number) {
+function formatPercent(value: number | string) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return '-'
   return `${Number(value).toFixed(2)}%`
 }
 
-function outRateClass(value: number) {
+function outRateClass(value: number | string) {
   const rate = Number(value)
   if (Number.isNaN(rate)) return ''
-  if (rate > 0.5) return 'danger-text'
-  if (rate > 0.1) return 'warning-text'
+  if (rate > 5) return 'danger-text'
+  if (rate > 1) return 'warning-text'
   return ''
 }
 

@@ -14,9 +14,20 @@
           clearable
           class="search-input"
         />
-        <el-button type="primary" :loading="loading" @click="handleGenerate">生成报告</el-button>
-        <el-button :disabled="!searchForm.batchNo" @click="handleClearCache">清除缓存</el-button>
+        <el-button type="primary" :loading="loading" @click="handleGenerate">
+          {{ loading ? '正在生成...' : '生成报告' }}
+        </el-button>
+        <el-button :disabled="!searchForm.batchNo || loading" @click="handleClearCache">清除缓存</el-button>
       </div>
+
+      <el-alert
+        v-if="loading"
+        type="info"
+        show-icon
+        :closable="false"
+        class="loading-tip"
+        title="正在生成 AI 质量报告，请稍候（约 30 秒）..."
+      />
 
       <el-empty v-if="!report" description="输入批次号后生成质量报告" />
 
@@ -31,20 +42,31 @@
 
         <el-card shadow="never" class="section-card">
           <template #header>
-            <span>批次基本信息</span>
+            <span>批次概览</span>
           </template>
           <el-descriptions :column="3" border>
             <el-descriptions-item label="批次号">{{ basicInfo.batchNo || searchForm.batchNo }}</el-descriptions-item>
-            <el-descriptions-item label="工单号">{{ basicInfo.woNo || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="工单号">{{ basicInfo.orderNo || basicInfo.woNo || '-' }}</el-descriptions-item>
             <el-descriptions-item label="产品">{{ basicInfo.productName || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="计划产量">{{ formatNumber(basicInfo.targetQty) }}</el-descriptions-item>
             <el-descriptions-item label="产量">{{ formatNumber(basicInfo.actualQty) }}</el-descriptions-item>
             <el-descriptions-item label="良品">{{ formatNumber(basicInfo.goodQty) }}</el-descriptions-item>
             <el-descriptions-item label="不良品">{{ formatNumber(basicInfo.badQty) }}</el-descriptions-item>
+            <el-descriptions-item label="生产时长">
+              {{ formatDuration(basicInfo.durationMinutes) }}
+            </el-descriptions-item>
             <el-descriptions-item label="良率">
               {{ formatPercent(basicInfo.yieldRate) }}
             </el-descriptions-item>
             <el-descriptions-item label="状态">
               <el-tag>{{ basicInfo.batchStatusLabel || basicInfo.batchStatus || '-' }}</el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="综合CPK">{{ formatNumber(basicInfo.overallCpk) }}</el-descriptions-item>
+            <el-descriptions-item label="CPK达标/不达标">
+              {{ formatNumber(basicInfo.cpkPassCount) }} / {{ formatNumber(basicInfo.cpkFailCount) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="最佳/最差设备">
+              {{ basicInfo.bestStationCode || '-' }} / {{ basicInfo.worstStationCode || '-' }}
             </el-descriptions-item>
             <el-descriptions-item label="时间区间">
               {{ basicInfo.startTime || '-' }} ~ {{ basicInfo.endTime || '-' }}
@@ -54,63 +76,41 @@
 
         <el-card shadow="never" class="section-card">
           <template #header>
-            <span>8个工位统计明细</span>
+            <span>关键风险点</span>
           </template>
-          <el-table :data="stationStats" stripe border style="width: 100%">
-            <el-table-column prop="stationNo" label="工位" width="80" />
-            <el-table-column prop="stationName" label="工位名称" min-width="120" />
-            <el-table-column prop="deviceCode" label="设备编码" min-width="140" />
-            <el-table-column prop="processType" label="工序" min-width="110" />
-            <el-table-column label="参数" min-width="140">
-              <template #default="{ row }">{{ row.parameterName || '-' }} {{ row.unit || '' }}</template>
-            </el-table-column>
-            <el-table-column label="目标值" width="100">
-              <template #default="{ row }">{{ formatNumber(row.targetValue) }}</template>
-            </el-table-column>
-            <el-table-column label="下限" width="100">
-              <template #default="{ row }">{{ formatNumber(row.minThreshold) }}</template>
-            </el-table-column>
-            <el-table-column label="上限" width="100">
-              <template #default="{ row }">{{ formatNumber(row.maxThreshold) }}</template>
-            </el-table-column>
-            <el-table-column prop="sampleCount" label="样本量" width="90" />
-            <el-table-column label="均值" width="100">
-              <template #default="{ row }">{{ formatNumber(row.mean) }}</template>
-            </el-table-column>
-            <el-table-column label="标准差" width="100">
-              <template #default="{ row }">{{ formatNumber(row.stdDev) }}</template>
-            </el-table-column>
-            <el-table-column label="最小值" width="100">
-              <template #default="{ row }">{{ formatNumber(row.min) }}</template>
-            </el-table-column>
-            <el-table-column label="最大值" width="100">
-              <template #default="{ row }">{{ formatNumber(row.max) }}</template>
-            </el-table-column>
-            <el-table-column label="超标率" width="100">
-              <template #default="{ row }">{{ formatPercent(row.outOfSpecRate) }}</template>
-            </el-table-column>
-            <el-table-column label="CPK" width="100">
-              <template #default="{ row }">{{ formatNumber(row.cpk) }}</template>
-            </el-table-column>
-            <el-table-column label="操作" width="110" fixed="right">
-              <template #default="{ row }">
-                <el-button link type="primary" size="small" @click="openTimeSeries(row)">
-                  时序数据
-                </el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+          <div v-if="riskHighlights.length" class="risk-highlight-list">
+            <el-tag
+              v-for="(item, index) in riskHighlights"
+              :key="`${item}-${index}`"
+              type="danger"
+              effect="dark"
+              class="risk-tag"
+            >
+              {{ item }}
+            </el-tag>
+          </div>
+          <el-empty v-else description="暂无关键风险点" :image-size="50" />
         </el-card>
 
         <el-row :gutter="12" class="section-row">
           <el-col :xs="24" :lg="12">
             <el-card shadow="never" class="section-card compact">
               <template #header>
-                <span>告警次数分布</span>
+                <div class="section-header-row">
+                  <span>告警次数分布</span>
+                  <el-tag type="danger">总告警 {{ totalAlarmCount }}</el-tag>
+                </div>
               </template>
               <el-table :data="alarmDistribution" stripe border style="width: 100%">
-                <el-table-column prop="alarmType" label="告警类型" min-width="140" />
-                <el-table-column prop="alarmLevel" label="告警等级" min-width="120" />
+                <el-table-column prop="deviceCode" label="传感器编码" min-width="130" />
+                <el-table-column prop="processType" label="工序" min-width="130" />
+                <el-table-column label="告警等级" min-width="120">
+                  <template #default="{ row }">
+                    <el-tag :type="row.alarmLevel === 'CRITICAL' ? 'danger' : 'warning'">
+                      {{ row.alarmLevel || '-' }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
                 <el-table-column prop="alarmCount" label="次数" width="90" />
               </el-table>
             </el-card>
@@ -153,6 +153,69 @@
             </el-card>
           </el-col>
         </el-row>
+
+        <el-card shadow="never" class="section-card">
+          <template #header>
+            <span>按设备分组的质量统计（{{ equipmentStats.length }}台设备）</span>
+          </template>
+
+          <el-alert
+            v-if="!hasQualityDetails"
+            type="warning"
+            show-icon
+            :closable="false"
+            class="equipment-comment"
+            title="当前接口未返回设备分组明细（equipmentStatsList/processQualityList）。"
+          />
+
+          <div v-if="equipmentStats.length" class="equipment-group-list">
+            <el-card
+              v-for="(equip, equipIndex) in equipmentStats"
+              :key="`${equip.equipCode || equip.equipName || 'equip'}-${equipIndex}`"
+              shadow="never"
+              class="equipment-item"
+            >
+              <template #header>
+                <div class="equipment-header">
+                  <div class="equipment-title">
+                    {{ equip.equipName || '-' }}
+                    <span class="equipment-code">{{ equip.equipCode || '-' }}</span>
+                  </div>
+                  <div class="equipment-tags">
+                    <el-tag>工序 {{ equip.processName || equip.processType || '-' }}</el-tag>
+                    <el-tag :type="cpkLevelTagType(equip.cpkLevel)">
+                      综合CPK {{ formatNumber(equip.cpk) }} / {{ equip.cpkLevel || '-' }}
+                    </el-tag>
+                    <el-tag :type="Number(equip.alarmCount || 0) > 0 ? 'danger' : 'success'">
+                      报警 {{ formatNumber(equip.alarmCount) }}
+                    </el-tag>
+                    <el-tag type="warning">超标率 {{ formatPercent(equip.outOfRangeRate) }}</el-tag>
+                  </div>
+                </div>
+              </template>
+
+              <el-alert
+                v-if="equip.healthComment"
+                type="info"
+                show-icon
+                :closable="false"
+                class="equipment-comment"
+                :title="`健康评语：${equip.healthComment}`"
+              />
+
+              <el-alert
+                v-if="equip.qualityImpact"
+                type="warning"
+                show-icon
+                :closable="false"
+                class="equipment-comment"
+                :title="`质量影响：${equip.qualityImpact}`"
+              />
+            </el-card>
+          </div>
+
+          <el-empty v-else description="暂无设备分组统计数据" :image-size="50" />
+        </el-card>
       </div>
     </el-card>
 
@@ -185,6 +248,7 @@ import {
   getBatchQualityTimeSeries,
   type BatchAiAssessment,
   type BatchAlarmDistribution,
+  type BatchEquipmentStat,
   type BatchQualityBasicInfo,
   type BatchQualityReport,
   type BatchQualityReportRaw,
@@ -210,12 +274,20 @@ const basicInfo = computed<BatchQualityBasicInfo>(() => {
   const source = (report.value?.basicInfo || {}) as BatchQualityBasicInfo
   return {
     batchNo: source.batchNo || searchForm.batchNo,
+    orderNo: source.orderNo,
     woNo: source.woNo,
     productName: source.productName,
+    targetQty: source.targetQty,
     actualQty: source.actualQty,
     goodQty: source.goodQty,
     badQty: source.badQty,
     yieldRate: source.yieldRate,
+    durationMinutes: source.durationMinutes,
+    overallCpk: source.overallCpk,
+    cpkPassCount: source.cpkPassCount,
+    cpkFailCount: source.cpkFailCount,
+    bestStationCode: source.bestStationCode,
+    worstStationCode: source.worstStationCode,
     batchStatus: source.batchStatus,
     batchStatusLabel: source.batchStatusLabel,
     startTime: source.startTime,
@@ -223,15 +295,30 @@ const basicInfo = computed<BatchQualityBasicInfo>(() => {
   }
 })
 
-const stationStats = computed<BatchStationStat[]>(() => {
-  return (report.value?.stationStats || []).map((item, index) => ({
+const equipmentStats = computed<BatchEquipmentStat[]>(() => {
+  const list = report.value?.equipmentStats || []
+  return list.map((item) => ({
     ...item,
-    stationNo: item.stationNo ?? index + 1,
+    sensorStatsList: (item.sensorStatsList || []).map((sensor, index) => ({
+      ...sensor,
+      stationNo: sensor.stationNo ?? index + 1,
+    })),
   }))
 })
 
+const hasQualityDetails = computed(() => {
+  return equipmentStats.value.length > 0
+})
+
 const alarmDistribution = computed<BatchAlarmDistribution[]>(() => {
-  return report.value?.alarmDistribution || []
+  const list = report.value?.alarmDistribution || []
+  return [...list].sort((a, b) => Number(b.alarmCount || 0) - Number(a.alarmCount || 0))
+})
+
+const totalAlarmCount = computed(() => {
+  const value = report.value?.totalAlarmCount
+  if (typeof value === 'number' && !Number.isNaN(value)) return value
+  return alarmDistribution.value.reduce((sum, item) => sum + Number(item.alarmCount || 0), 0)
 })
 
 const aiAssessment = computed<BatchAiAssessment>(() => {
@@ -241,7 +328,12 @@ const aiAssessment = computed<BatchAiAssessment>(() => {
     summary: report.value?.aiAssessment?.summary,
     rootCause: report.value?.aiAssessment?.rootCause,
     suggestions: report.value?.aiAssessment?.suggestions || [],
+    riskHighlights: report.value?.aiAssessment?.riskHighlights || [],
   }
+})
+
+const riskHighlights = computed<string[]>(() => {
+  return aiAssessment.value.riskHighlights || []
 })
 
 const normalizeScore = (score?: number) => {
@@ -264,6 +356,14 @@ const progressStatus = (grade?: string) => {
   return 'exception'
 }
 
+const cpkLevelTagType = (level?: string) => {
+  if (level === '优秀') return 'success'
+  if (level === '良好') return 'primary'
+  if (level === '待改善') return 'warning'
+  if (level === '不合格') return 'danger'
+  return 'info'
+}
+
 const formatNumber = (value: unknown) => {
   if (value === null || value === undefined || value === '') return '-'
   const num = Number(value)
@@ -281,6 +381,19 @@ const formatPercent = (value: unknown) => {
   }
 
   return `${num.toFixed(2)}%`
+}
+
+const formatDuration = (value: unknown) => {
+  if (value === null || value === undefined || value === '') return '-'
+  const minutes = Number(value)
+  if (Number.isNaN(minutes) || minutes < 0) return '-'
+
+  const totalMinutes = Math.floor(minutes)
+  const hours = Math.floor(totalMinutes / 60)
+  const remainMinutes = totalMinutes % 60
+  if (hours <= 0) return `${remainMinutes}分钟`
+  if (remainMinutes === 0) return `${hours}小时`
+  return `${hours}小时${remainMinutes}分`
 }
 
 const formatTimestamp = (ts: unknown) => {
@@ -304,6 +417,19 @@ const toNumber = (value: unknown) => {
   return Number.isNaN(num) ? undefined : num
 }
 
+const splitToList = (value: unknown) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => String(item || '').trim())
+      .filter((item) => item.length > 0)
+  }
+  if (typeof value !== 'string') return []
+  return value
+    .split(/[;；\n]/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+}
+
 const sanitizeStationStats = (source: unknown): BatchStationStat[] => {
   if (!Array.isArray(source)) return []
 
@@ -311,8 +437,15 @@ const sanitizeStationStats = (source: unknown): BatchStationStat[] => {
     const row = raw as Record<string, unknown>
     return {
       stationNo: toNumber(row.stationNo) ?? index + 1,
-      stationName: (row.stationName as string) || undefined,
+      stationName:
+        (row.stationName as string) ||
+        (row.equipName as string) ||
+        (row.deviceName as string) ||
+        undefined,
       deviceCode: String(row.deviceCode || ''),
+      deviceName: (row.deviceName as string) || undefined,
+      equipCode: (row.equipCode as string) || undefined,
+      equipName: (row.equipName as string) || undefined,
       processType: (row.processType as string) || undefined,
       parameterName: (row.parameterName as string) || undefined,
       unit: (row.unit as string) || undefined,
@@ -330,41 +463,129 @@ const sanitizeStationStats = (source: unknown): BatchStationStat[] => {
       outOfSpecRate: toNumber(row.outOfSpecRate ?? row.outOfRangeRate),
       outOfRangeRate: toNumber(row.outOfRangeRate ?? row.outOfSpecRate),
       cpk: toNumber(row.cpk),
+      cpkLevel: (row.cpkLevel as string) || undefined,
+    }
+  })
+}
+
+const sanitizeEquipmentSensorStats = (source: unknown): BatchStationStat[] => {
+  if (!Array.isArray(source)) return []
+
+  const rows: BatchStationStat[] = []
+
+  source.forEach((equipment) => {
+    const equip = equipment as Record<string, unknown>
+    const sensorList = Array.isArray(equip.sensorStatsList) ? equip.sensorStatsList : []
+
+    sensorList.forEach((sensor) => {
+      const normalized = sanitizeStationStats([sensor])[0]
+      if (!normalized) return
+
+      rows.push({
+        ...normalized,
+        stationNo: rows.length + 1,
+        equipCode: normalized.equipCode || (equip.equipCode as string) || undefined,
+        equipName: normalized.equipName || (equip.equipName as string) || undefined,
+        processType: normalized.processType || (equip.processType as string) || undefined,
+      })
+    })
+  })
+
+  return rows
+}
+
+const sanitizeEquipmentStats = (source: unknown): BatchEquipmentStat[] => {
+  if (!Array.isArray(source)) return []
+
+  return source.map((raw) => {
+    const row = raw as Record<string, unknown>
+    const sensorStats = sanitizeStationStats(row.sensorStatsList)
+
+    return {
+      processName: (row.processName as string) || undefined,
+      equipCode: (row.equipCode as string) || undefined,
+      equipName: (row.equipName as string) || undefined,
+      processType: (row.processType as string) || undefined,
+      cpk: toNumber(row.cpk),
+      cpkLevel: (row.cpkLevel as string) || undefined,
+      alarmCount: toNumber(row.alarmCount),
+      outOfRangeRate: toNumber(row.outOfRangeRate),
+      healthComment: (row.healthComment as string) || undefined,
+      qualityImpact: (row.qualityImpact as string) || undefined,
+      sensorStatsList: sensorStats,
+    }
+  })
+}
+
+const sanitizeAlarmDistribution = (source: unknown): BatchAlarmDistribution[] => {
+  if (!Array.isArray(source)) return []
+
+  return source.map((raw) => {
+    const row = raw as Record<string, unknown>
+    return {
+      deviceCode: (row.deviceCode as string) || undefined,
+      processType: (row.processType as string) || undefined,
+      alarmType: (row.alarmType as string) || (row.processType as string) || undefined,
+      alarmLevel: (row.alarmLevel as string) || undefined,
+      alarmCount: toNumber(row.alarmCount) ?? 0,
     }
   })
 }
 
 const sanitizeReport = (raw: BatchQualityReportRaw | BatchQualityReport): BatchQualityReport => {
   const reportRaw = raw as BatchQualityReportRaw
-  const normalizedFromFlat = Boolean(reportRaw.batchNo || reportRaw.stationStatsList)
+  const normalizedFromFlat = Boolean(
+    reportRaw.batchNo || reportRaw.stationStatsList || reportRaw.equipmentStatsList || reportRaw.processQualityList,
+  )
 
   if (normalizedFromFlat) {
+    const targetQty = toNumber(reportRaw.targetQty)
+    const actualQty = toNumber(reportRaw.actualQty)
+    const badQty = toNumber(reportRaw.badQty)
+    const groupedStatsSource = reportRaw.equipmentStatsList || reportRaw.processQualityList
+    const equipmentStats = sanitizeEquipmentStats(groupedStatsSource)
+    const sensorStats = sanitizeEquipmentSensorStats(groupedStatsSource)
+    const legacyStationStats = sanitizeStationStats(reportRaw.stationStatsList)
     const suggestion = reportRaw.aiImprovementSuggestion
+
     return {
       basicInfo: {
         batchNo: reportRaw.batchNo || searchForm.batchNo,
-        actualQty: reportRaw.actualQty,
+        orderNo: reportRaw.orderNo || reportRaw.woNo,
+        woNo: reportRaw.woNo,
+        productName: reportRaw.productName,
+        targetQty,
+        actualQty,
         goodQty:
-          typeof reportRaw.actualQty === 'number' && typeof reportRaw.badQty === 'number'
-            ? reportRaw.actualQty - reportRaw.badQty
+          typeof actualQty === 'number' && typeof badQty === 'number'
+            ? actualQty - badQty
             : undefined,
-        badQty: reportRaw.badQty,
-        yieldRate: reportRaw.yieldRate,
+        badQty,
+        yieldRate: toNumber(reportRaw.yieldRate),
+        durationMinutes: toNumber(reportRaw.durationMinutes),
+        overallCpk: toNumber(reportRaw.overallCpk),
+        cpkPassCount: toNumber(reportRaw.cpkPassCount),
+        cpkFailCount: toNumber(reportRaw.cpkFailCount),
+        bestStationCode: reportRaw.bestStationCode,
+        worstStationCode: reportRaw.worstStationCode,
         batchStatus: reportRaw.batchStatus,
         batchStatusLabel:
           typeof reportRaw.batchStatus === 'string' ? reportRaw.batchStatus : undefined,
         startTime: reportRaw.startTime,
         endTime: reportRaw.endTime,
       },
-      stationStats: sanitizeStationStats(reportRaw.stationStatsList),
-      alarmDistribution: Array.isArray(reportRaw.alarmDistribution) ? reportRaw.alarmDistribution : [],
+      stationStats: sensorStats.length ? sensorStats : legacyStationStats,
+      equipmentStats,
+      alarmDistribution: sanitizeAlarmDistribution(reportRaw.alarmDistribution),
       aiAssessment: {
         grade: reportRaw.qualityGrade,
         score: reportRaw.qualityScore,
         summary: reportRaw.aiReportSummary,
         rootCause: reportRaw.aiRootCauseAnalysis,
-        suggestions: suggestion ? [suggestion] : [],
+        suggestions: splitToList(suggestion),
+        riskHighlights: splitToList(reportRaw.aiRiskHighlights),
       },
+      totalAlarmCount: toNumber(reportRaw.totalAlarmCount),
       generatedAt: reportRaw.reportTime,
       cacheTtlSeconds: 1800,
     }
@@ -379,26 +600,37 @@ const sanitizeReport = (raw: BatchQualityReportRaw | BatchQualityReport): BatchQ
     ...old,
     basicInfo: {
       batchNo: basic.batchNo || searchForm.batchNo,
+      orderNo: basic.orderNo,
       woNo: basic.woNo,
       productName: basic.productName,
+      targetQty: basic.targetQty,
       actualQty: basic.actualQty,
       goodQty: basic.goodQty,
       badQty: basic.badQty,
       yieldRate: basic.yieldRate,
+      durationMinutes: basic.durationMinutes,
+      overallCpk: basic.overallCpk,
+      cpkPassCount: basic.cpkPassCount,
+      cpkFailCount: basic.cpkFailCount,
+      bestStationCode: basic.bestStationCode,
+      worstStationCode: basic.worstStationCode,
       batchStatus: basic.batchStatus,
       batchStatusLabel: basic.batchStatusLabel,
       startTime: basic.startTime,
       endTime: basic.endTime,
     },
     stationStats: sanitizeStationStats(old.stationStats),
-    alarmDistribution: Array.isArray(old.alarmDistribution) ? old.alarmDistribution : [],
+    equipmentStats: sanitizeEquipmentStats(old.equipmentStats),
+    alarmDistribution: sanitizeAlarmDistribution(old.alarmDistribution),
     aiAssessment: {
       grade: aiRaw.grade,
       score: aiRaw.score,
       summary: aiRaw.summary,
       rootCause: aiRaw.rootCause,
       suggestions: normalizedSuggestions,
+      riskHighlights: splitToList(aiRaw.riskHighlights),
     },
+    totalAlarmCount: toNumber(old.totalAlarmCount),
     cacheTtlSeconds: old.cacheTtlSeconds,
     generatedAt: old.generatedAt,
   }
@@ -442,7 +674,7 @@ const openTimeSeries = async (row: BatchStationStat) => {
     return
   }
   if (!row.deviceCode) {
-    ElMessage.warning('当前工位缺少设备编码，无法查询时序数据')
+    ElMessage.warning('当前传感器缺少编码，无法查询时序数据')
     return
   }
 
@@ -485,6 +717,10 @@ const openTimeSeries = async (row: BatchStationStat) => {
   width: 320px;
 }
 
+.loading-tip {
+  margin-bottom: 12px;
+}
+
 .report-wrapper {
   display: flex;
   flex-direction: column;
@@ -493,6 +729,13 @@ const openTimeSeries = async (row: BatchStationStat) => {
 
 .report-meta {
   margin-bottom: 4px;
+}
+
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .section-card {
@@ -505,6 +748,48 @@ const openTimeSeries = async (row: BatchStationStat) => {
 
 .section-row {
   margin-top: 0;
+}
+
+.equipment-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.equipment-item {
+  border: 1px solid var(--el-border-color-lighter);
+}
+
+.equipment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.equipment-title {
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.equipment-code {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.equipment-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.equipment-comment {
+  margin-bottom: 10px;
 }
 
 .ai-panel {
@@ -527,6 +812,19 @@ const openTimeSeries = async (row: BatchStationStat) => {
 .suggestion-list {
   margin: 0;
   padding-left: 18px;
+}
+
+.risk-highlight-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.risk-tag {
+  white-space: normal;
+  height: auto;
+  line-height: 1.5;
+  max-width: 100%;
 }
 
 .drawer-top {

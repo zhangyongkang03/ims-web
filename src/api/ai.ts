@@ -142,29 +142,37 @@ export interface AiModelConfigForm {
 export type DeviceTrend = 'UP' | 'DOWN' | 'STABLE'
 export type DeviceUrgency = 'HIGH' | 'MEDIUM' | 'LOW'
 
-export interface DeviceDailySummary {
+export interface DeviceSensorSummary {
   deviceCode: string
   deviceType: string
+  sampleCount: number | string
+  mean: number | string
+  stdDev: number | string
+  outOfRangeRate: number | string
+  alarmCount: number | string
+  healthScore: number | string
+}
+
+export interface DeviceEquipmentSummary {
+  equipCode: string
   equipName: string
-  sampleCount: number
-  mean: number
-  stdDev: number
-  outOfRangeRate: number
-  alarmCount: number
-  healthScore: number
+  processType: string
+  alarmCount: number | string
+  healthScore: number | string
   trend: DeviceTrend
-  runningDays: number
+  runningDays: number | string
+  sensorSummaries?: DeviceSensorSummary[]
 }
 
 export interface DeviceAlarmTopItem {
-  deviceCode: string
-  deviceType: string
+  equipCode: string
+  equipName: string
   alarmCount: number
   topAlarmMsg: string
 }
 
 export interface DeviceMaintenanceSuggestion {
-  deviceCode: string
+  equipCode: string
   equipName: string
   urgency: DeviceUrgency
   suggestion: string
@@ -175,7 +183,9 @@ export interface DeviceMaintenanceSuggestion {
 export interface DeviceDailyReport {
   reportDate: string
   generateTime: string
-  deviceSummaries: DeviceDailySummary[]
+  equipmentSummaries?: DeviceEquipmentSummary[]
+  // backward compatibility
+  deviceSummaries?: DeviceSensorSummary[]
   alarmTopDevices: DeviceAlarmTopItem[]
   aiDailyOverview: string
   maintenanceSuggestions: DeviceMaintenanceSuggestion[]
