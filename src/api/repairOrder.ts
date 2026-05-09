@@ -61,14 +61,16 @@ export function getRepairOrderList(params: {
   status?: number
   searchKey?: string
 }) {
-  return request.get<ApiResponse<PageResult<RepairOrder>>>('/repair-orders', { params }).then((res) => ({
-    ...res,
-    data: {
-      ...res.data,
-      total: Number(res.data?.total ?? 0),
-      records: (res.data?.records || []).map(normalizeRepairOrder),
-    },
-  }))
+  return request
+    .get<ApiResponse<PageResult<RepairOrder>>>('/repair-orders', { params })
+    .then((res) => ({
+      ...res,
+      data: {
+        ...res.data,
+        total: Number(res.data?.total ?? 0),
+        records: (res.data?.records || []).map(normalizeRepairOrder),
+      },
+    }))
 }
 
 export function getRepairOrderDetail(repairId: string | number) {

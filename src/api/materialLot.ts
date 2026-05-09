@@ -116,7 +116,10 @@ function normalizeMaterialLot(raw: any): MaterialLot {
     locId: String(raw?.locId ?? ''),
     locCode: raw?.locCode,
     currentQty: Number(raw?.currentQty ?? 0),
-    arrivalQty: raw?.arrivalQty !== undefined && raw?.arrivalQty !== null ? Number(raw.arrivalQty) : undefined,
+    arrivalQty:
+      raw?.arrivalQty !== undefined && raw?.arrivalQty !== null
+        ? Number(raw.arrivalQty)
+        : undefined,
     unit: raw?.unit,
     unitName: raw?.unitName,
     productionDate,
