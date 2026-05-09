@@ -35,7 +35,7 @@ export interface AlarmQueryParams {
 
 export interface HandleAlarmForm {
   alarmId: number
-  handleUser: string
+  handleUser?: string
   handleRemark: string
 }
 
@@ -55,6 +55,24 @@ export interface AlarmPushMessage {
   type: string
   data?: AlarmPushData
   timestamp?: number
+}
+
+function normalizeAlarmRecord(raw: any): AlarmRecord {
+  return {
+    alarmId: Number(raw?.alarmId ?? raw?.id ?? 0),
+    batchNo: raw?.batchNo ?? '',
+    deviceCode: raw?.deviceCode ?? '',
+    processType: raw?.processType ?? '',
+    alarmLevel: raw?.alarmLevel ?? 'INFO',
+    currentValue: Number(raw?.currentValue ?? 0),
+    standardRange: raw?.standardRange ?? '',
+    alarmMsg: raw?.alarmMsg ?? '',
+    isHandled: Number(raw?.isHandled ?? 0),
+    handleUser: raw?.handleUser ?? null,
+    handleTime: raw?.handleTime ?? null,
+    handleRemark: raw?.handleRemark ?? null,
+    createTime: raw?.createTime ?? '',
+  }
 }
 
 /**
@@ -82,7 +100,17 @@ export function normalizeAlarmPushData(data: AlarmPushData): AlarmRecord {
  * 分页查询报警列表
  */
 export function getAlarmList(params: AlarmQueryParams) {
-  return request.get<ApiResponse<AlarmPageResult>>('/alarm/list', { params })
+  return request.get<ApiResponse<AlarmPageResult>>('/alarm/list', { params }).then((res) => ({
+    ...res,
+    data: {
+      ...res.data,
+      records: (res.data.records || []).map(normalizeAlarmRecord),
+      total: Number(res.data.total || 0),
+      pages: Number(res.data.pages || 0),
+      pageNum: Number(res.data.pageNum || params.pageNum || 1),
+      pageSize: Number(res.data.pageSize || params.pageSize || 10),
+    },
+  }))
 }
 
 /**

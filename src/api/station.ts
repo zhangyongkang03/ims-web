@@ -29,6 +29,26 @@ export interface PageResult<T> {
   records: T[]
 }
 
+function normalizeStationPage(raw: any): PageResult<Station> {
+  return {
+    total: Number(raw?.total ?? 0),
+    records: Array.isArray(raw?.records) ? raw.records.map(normalizeStation) : [],
+  }
+}
+
+function normalizeStation(raw: any): Station {
+  return {
+    stationId: Number(raw?.stationId ?? 0),
+    stationCode: String(raw?.stationCode ?? ''),
+    stationName: String(raw?.stationName ?? ''),
+    processType: String(raw?.processType ?? ''),
+    sortOrder: Number(raw?.sortOrder ?? 0),
+    status: Number(raw?.status ?? 1),
+    createTime: raw?.createTime,
+    updateTime: raw?.updateTime,
+  }
+}
+
 /**
  * 分页查询工位列表
  */
@@ -38,7 +58,20 @@ export function getStationList(params: {
   searchKey?: string
   searchStatus?: number
 }) {
-  return request.get<ApiResponse<PageResult<Station>>>('/stations', { params })
+  return request.get<ApiResponse<PageResult<Station>>>('/stations', { params }).then((res) => ({
+    ...res,
+    data: normalizeStationPage(res.data),
+  }))
+}
+
+/**
+ * 查询启用工位选项
+ */
+export function getStationOptions() {
+  return request.get<ApiResponse<any[]>>('/stations/options').then((res) => ({
+    ...res,
+    data: (res.data || []).map(normalizeStation),
+  }))
 }
 
 /**

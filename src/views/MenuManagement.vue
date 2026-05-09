@@ -45,7 +45,7 @@
       width="600px"
       @close="handleDialogClose"
     >
-      <el-form ref="formRef" :model="form" :rules="formRules" label-width="100px">
+      <el-form ref="formRef" :model="form" :rules="formRules" label-width="100px" scroll-to-error>
         <el-form-item label="上级菜单">
           <el-tree-select
             v-model="form.parentId"
@@ -113,8 +113,8 @@ const treeProps = {
 }
 
 const formRules: FormRules = {
-  menuName: [{ required: true, message: '请输入菜单名称', trigger: 'blur' }],
-  menuType: [{ required: true, message: '请选择菜单类型', trigger: 'change' }],
+  menuName: [{ required: true, message: '请输入菜单名称' }],
+  menuType: [{ required: true, message: '请选择菜单类型' }],
 }
 
 // 菜单树选项（包含根节点）

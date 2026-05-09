@@ -33,7 +33,11 @@
       <el-table :data="tableData" stripe style="width: 100%" v-loading="loading">
         <el-table-column prop="pcode" label="产品编码" width="120" />
         <el-table-column prop="pname" label="产品名称" width="150" />
-        <el-table-column prop="pspec" label="产品规格" width="150" />
+        <el-table-column label="产品规格" width="140">
+          <template #default="scope">
+            {{ formatProductSpec(scope.row) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="punit" label="单位" width="100">
           <template #default="scope">
             {{ getUnitTypeLabel(scope.row.pUnit ?? scope.row.punit) }}
@@ -66,8 +70,10 @@
         v-model:page-size="pagination.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         :total="pagination.total"
+        :hide-on-single-page="false"
         layout="total, sizes, prev, pager, next, jumper"
-        @change="getList"
+        @current-change="handleCurrentPageChange"
+        @size-change="handlePageSizeChange"
         class="pagination"
       />
     </el-card>
@@ -80,25 +86,85 @@
         :rules="rules"
         label-width="100px"
         label-position="right"
+        scroll-to-error
       >
         <el-form-item v-if="dialogType === 'edit'" label="产品编码">
           <el-input v-model="formData.pCode" disabled />
         </el-form-item>
         <el-form-item label="产品名称" prop="pName">
-          <el-input v-model="formData.pName" />
+          <el-input v-model="formData.pName" @blur="validateFieldIfNeeded('pName')" />
         </el-form-item>
-        <el-form-item label="产品规格" prop="pSpec">
-          <el-input v-model="formData.pSpec" />
+        <el-form-item label="规格数值" prop="spec_value">
+          <el-input
+            v-model="formData.spec_value"
+            type="number"
+            placeholder="如 500"
+            @blur="validateFieldIfNeeded('spec_value')"
+          />
+        </el-form-item>
+        <el-form-item label="规格单位" prop="spec_unit">
+          <div class="unit-inline">
+            <el-select
+              v-model="formState.specUnitCategory"
+              placeholder="请选择单位类型"
+              clearable
+              class="unit-inline-select"
+              @change="handleSpecUnitCategoryChange"
+            >
+              <el-option
+                v-for="item in unitCategoryOptions"
+                :key="item.dictValue"
+                :label="item.dictLabel"
+                :value="item.dictValue"
+              />
+            </el-select>
+            <el-select
+              v-if="formState.specUnitCategory"
+              v-model="formData.spec_unit"
+              placeholder="请选择规格单位"
+              class="unit-inline-select"
+              @change="validateFieldIfNeeded('spec_unit')"
+            >
+              <el-option
+                v-for="item in specUnitOptions"
+                :key="item.dictValue"
+                :label="item.dictLabel"
+                :value="item.dictValue"
+              />
+            </el-select>
+          </div>
         </el-form-item>
         <el-form-item label="单位" prop="pUnit">
-          <el-select v-model="formData.pUnit" placeholder="请选择单位">
-            <el-option
-              v-for="item in unitTypeOptions"
-              :key="item.dictValue"
-              :label="item.dictLabel"
-              :value="item.dictValue"
-            />
-          </el-select>
+          <div class="unit-inline">
+            <el-select
+              v-model="formState.unitCategory"
+              placeholder="请选择单位类型"
+              clearable
+              class="unit-inline-select"
+              @change="handleUnitCategoryChange"
+            >
+              <el-option
+                v-for="item in unitCategoryOptions"
+                :key="item.dictValue"
+                :label="item.dictLabel"
+                :value="item.dictValue"
+              />
+            </el-select>
+            <el-select
+              v-if="formState.unitCategory"
+              v-model="formData.pUnit"
+              placeholder="请选择单位"
+              class="unit-inline-select"
+              @change="validateFieldIfNeeded('pUnit')"
+            >
+              <el-option
+                v-for="item in unitTypeOptions"
+                :key="item.dictValue"
+                :label="item.dictLabel"
+                :value="item.dictValue"
+              />
+            </el-select>
+          </div>
         </el-form-item>
         <el-form-item label="保质期(天)" prop="shelfLife">
           <el-input v-model.number="formData.shelfLife" type="number" />
@@ -107,7 +173,7 @@
           <el-input v-model="formData.storageCondition" type="textarea" :rows="3" />
         </el-form-item>
         <el-form-item label="状态" prop="status">
-          <el-select v-model="formData.status">
+          <el-select v-model="formData.status" @change="validateFieldIfNeeded('status')">
             <el-option label="启用" :value="1" />
             <el-option label="禁用" :value="0" />
           </el-select>
@@ -124,6 +190,7 @@
 </template>
 
 <script setup lang="ts">
+import { getDictDataList } from '@/api/dict'
 import {
   addProduct,
   deleteProduct,
@@ -132,7 +199,9 @@ import {
   type Product,
   type ProductForm,
 } from '@/api/product'
+import { useDeferredFormValidation } from '@/composables/useDeferredFormValidation'
 import { useDictData } from '@/composables/useDictData'
+import { useUnitDict } from '@/composables/useUnitDict'
 import { DICT_TYPE } from '@/constants/dict'
 import type { FormInstance } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -142,13 +211,24 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const dialogType = ref<'add' | 'edit'>('add')
 const formRef = ref<FormInstance>()
+const { enableInteractionValidation, resetInteractionValidation, validateFieldIfNeeded } =
+  useDeferredFormValidation(formRef)
 const tableData = ref<Product[]>([])
 
+const { options: unitCategoryOptions, load: loadUnitCategoryDict } = useDictData(
+  DICT_TYPE.UNIT_CATEGORY,
+)
+
 const {
-  options: unitTypeOptions,
-  getLabel: getUnitTypeLabel,
-  load: loadUnitTypeDict,
-} = useDictData(DICT_TYPE.UNIT_TYPE)
+  unitOptions: unitTypeOptions,
+  loadUnitsByCategory,
+  loadUnitLabelMap,
+  getUnitLabel: getUnitTypeLabel,
+} = useUnitDict()
+
+const { unitOptions: specUnitOptions, loadUnitsByCategory: loadSpecUnitsByCategory } = useUnitDict()
+
+const unitCategoryMap = ref<Record<string, string>>({})
 
 const pagination = reactive({
   pageNum: 1,
@@ -158,27 +238,63 @@ const pagination = reactive({
 
 const searchForm = reactive({
   searchKey: '',
-  searchStatus: undefined,
+  searchStatus: 1,
+})
+
+const formState = reactive({
+  unitCategory: '',
+  specUnitCategory: '',
 })
 
 const formData = reactive<ProductForm>({
   pCode: '',
   pName: '',
-  pSpec: '',
   pUnit: '',
+  spec_value: '',
+  spec_unit: '',
   shelfLife: 365,
   storageCondition: '',
   status: 1,
 })
 
 const rules = {
-  pName: [{ required: true, message: '产品名称不能为空', trigger: 'blur' }],
-  pSpec: [{ required: true, message: '产品规格不能为空', trigger: 'blur' }],
-  pUnit: [{ required: true, message: '单位不能为空', trigger: 'blur' }],
-  status: [{ required: true, message: '状态不能为空', trigger: 'blur' }],
+  pName: [{ required: true, message: '产品名称不能为空' }],
+  pUnit: [{ required: true, message: '单位不能为空' }],
+  spec_value: [{ required: true, message: '规格数值不能为空' }],
+  spec_unit: [{ required: true, message: '规格单位不能为空' }],
+  status: [{ required: true, message: '状态不能为空' }],
 }
 
 const dialogTitle = ref('新增产品')
+
+const formatProductSpec = (product: Product) => {
+  const specValue =
+    product.spec_value === undefined || product.spec_value === null
+      ? ''
+      : String(product.spec_value)
+  const specUnit = getUnitTypeLabel(product.spec_unit)
+  const productUnit = getUnitTypeLabel(product.pUnit ?? product.punit)
+  const leftPart = [specValue, specUnit].filter(Boolean).join('')
+
+  return [leftPart, productUnit].filter(Boolean).join('/')
+}
+
+const handleUnitCategoryChange = async (category?: string) => {
+  formData.pUnit = ''
+  await loadUnitsByCategory(category)
+  await validateFieldIfNeeded('pUnit')
+}
+
+const handleSpecUnitCategoryChange = async (category?: string) => {
+  formData.spec_unit = ''
+  await loadSpecUnitsByCategory(category)
+  await validateFieldIfNeeded('spec_unit')
+}
+
+const resolveUnitCategory = (unitValue?: string) => {
+  if (!unitValue) return ''
+  return unitCategoryMap.value[unitValue] || ''
+}
 
 const getList = async () => {
   loading.value = true
@@ -189,8 +305,8 @@ const getList = async () => {
       searchKey: searchForm.searchKey,
       searchStatus: searchForm.searchStatus,
     })
-    tableData.value = res.data.records
-    pagination.total = res.data.total
+    tableData.value = res.data.records || []
+    pagination.total = Number(res.data.total || 0)
   } catch (error) {
     console.error('获取产品列表失败:', error)
   } finally {
@@ -203,38 +319,64 @@ const handleSearch = () => {
   getList()
 }
 
+const handleCurrentPageChange = (pageNum: number) => {
+  pagination.pageNum = pageNum
+  getList()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
+  pagination.pageNum = 1
+  getList()
+}
+
 const handleReset = () => {
   searchForm.searchKey = ''
-  searchForm.searchStatus = undefined
+  searchForm.searchStatus = 1
   pagination.pageNum = 1
   getList()
 }
 
 const openDialog = (type: 'add' | 'edit') => {
+  resetInteractionValidation()
   dialogType.value = type
   dialogTitle.value = type === 'add' ? '新增产品' : '编辑产品'
   dialogVisible.value = true
 
   if (type === 'add') {
+    formState.unitCategory = ''
+    formState.specUnitCategory = ''
     formData.pName = ''
-    formData.pSpec = ''
     formData.pUnit = ''
+    formData.spec_value = ''
+    formData.spec_unit = ''
     formData.shelfLife = 365
     formData.storageCondition = ''
     formData.status = 1
+    loadUnitsByCategory()
+    loadSpecUnitsByCategory()
   }
 }
 
-const handleEdit = (row: Product) => {
+const handleEdit = async (row: Product) => {
+  resetInteractionValidation()
   dialogType.value = 'edit'
   dialogTitle.value = '编辑产品'
   dialogVisible.value = true
+  const unitCategory = resolveUnitCategory(row.punit)
+  const specUnitCategory = resolveUnitCategory(String(row.spec_unit || ''))
+
+  formState.unitCategory = unitCategory
+  formState.specUnitCategory = specUnitCategory
+
+  await Promise.all([loadUnitsByCategory(unitCategory), loadSpecUnitsByCategory(specUnitCategory)])
 
   formData.pId = row.pid
   formData.pCode = row.pcode
   formData.pName = row.pname
-  formData.pSpec = row.pspec
   formData.pUnit = row.punit
+  formData.spec_value = row.spec_value
+  formData.spec_unit = row.spec_unit
   formData.shelfLife = row.shelfLife || 365
   formData.storageCondition = row.storageCondition || ''
   formData.status = row.status
@@ -244,7 +386,10 @@ const handleSubmit = async () => {
   if (!formRef.value) return
 
   await formRef.value.validate(async (valid) => {
-    if (!valid) return
+    if (!valid) {
+      enableInteractionValidation()
+      return
+    }
 
     try {
       if (dialogType.value === 'add') {
@@ -284,7 +429,27 @@ const handleDelete = (row: Product) => {
 }
 
 getList()
-loadUnitTypeDict()
+
+const initUnitDict = async () => {
+  await loadUnitCategoryDict()
+  await loadUnitLabelMap(unitCategoryOptions.value)
+
+  const categoryEntries = await Promise.all(
+    unitCategoryOptions.value.map(async (item) => {
+      const dictType = item.dictValue
+      if (!dictType) return [] as Array<[string, string]>
+
+      const res = await getDictDataList(dictType)
+      return (res.data || [])
+        .filter((unit) => unit.dictValue)
+        .map((unit) => [unit.dictValue, dictType] as [string, string])
+    }),
+  )
+
+  unitCategoryMap.value = Object.fromEntries(categoryEntries.flat())
+}
+
+initUnitDict()
 </script>
 
 <style scoped>
@@ -319,10 +484,21 @@ loadUnitTypeDict()
 
 .pagination {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .dialog-footer {
   text-align: right;
+}
+
+.unit-inline {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.unit-inline-select {
+  width: 180px;
 }
 </style>

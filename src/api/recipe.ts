@@ -9,6 +9,8 @@ export interface Recipe {
   recipeCode: string
   recipeName: string
   baseQty: number
+  baseUnit?: string
+  baseUnitName?: string
   isActive: number
   isActiveLabel?: string
   createTime: string
@@ -18,10 +20,11 @@ export interface Recipe {
 // 配方表单
 export interface RecipeForm {
   recipeId?: number
-  pId: number
+  pId?: number
   recipeCode?: string
   recipeName: string
   baseQty: number
+  baseUnit?: string
   isActive: number
 }
 
@@ -33,6 +36,7 @@ export interface RecipeDetail {
   mname?: string
   standardQty: number
   unit: string
+  inputUnit?: string
   createTime?: string
   updateTime?: string
 }
@@ -44,6 +48,7 @@ export interface RecipeDetailForm {
   mId: number
   standardQty: number
   unit: string
+  inputUnit?: string
 }
 
 // 分页响应
@@ -52,24 +57,57 @@ export interface PageResult<T> {
   records: T[]
 }
 
+function normalizeRecipe(raw: any): Recipe {
+  const recipeId = Number(raw?.recipeId ?? 0)
+  const pid = Number(raw?.pid ?? raw?.pId ?? 0)
+  const baseQty = Number(raw?.baseQty ?? 0)
+  const isActive = Number(raw?.isActive ?? 0)
+  const baseUnit = raw?.baseUnit ?? raw?.base_unit ?? ''
+  const baseUnitName = raw?.baseUnitName ?? raw?.baseUnitLabel ?? baseUnit
+
+  return {
+    ...raw,
+    recipeId,
+    pid,
+    pId: pid,
+    recipeCode: raw?.recipeCode ?? '',
+    recipeName: raw?.recipeName ?? '',
+    baseQty,
+    baseUnit,
+    baseUnitName,
+    isActive,
+  }
+}
+
 /**
  * 分页查询配方列表
  */
 export function getRecipeList(params: {
   pageNum?: number
   pageSize?: number
+  recipeCode?: string
   searchKey?: string
   pId?: number
   isActive?: number
 }) {
-  return request.get<ApiResponse<PageResult<Recipe>>>('/recipes', { params })
+  return request.get<ApiResponse<PageResult<any>>>('/recipes', { params }).then((res) => ({
+    ...res,
+    data: {
+      ...res.data,
+      total: Number(res.data.total || 0),
+      records: (res.data.records || []).map(normalizeRecipe),
+    },
+  }))
 }
 
 /**
  * 获取配方详情
  */
 export function getRecipeDetail(recipeId: number) {
-  return request.get<ApiResponse<Recipe>>(`/recipes/${recipeId}`)
+  return request.get<ApiResponse<any>>(`/recipes/${recipeId}`).then((res) => ({
+    ...res,
+    data: normalizeRecipe(res.data),
+  }))
 }
 
 /**
@@ -116,14 +154,20 @@ export function getRecipeDetailInfo(detailId: number) {
  * 新增配方明细
  */
 export function addRecipeDetail(data: RecipeDetailForm) {
-  return request.post<ApiResponse>('/recipe-details', data)
+  return request.post<ApiResponse>('/recipe-details', {
+    ...data,
+    ...(data.inputUnit ? { inputUnit: data.inputUnit } : {}),
+  })
 }
 
 /**
  * 修改配方明细
  */
 export function updateRecipeDetail(detailId: number, data: Partial<RecipeDetailForm>) {
-  return request.put<ApiResponse>(`/recipe-details/${detailId}`, data)
+  return request.put<ApiResponse>(`/recipe-details/${detailId}`, {
+    ...data,
+    ...(data.inputUnit ? { inputUnit: data.inputUnit } : {}),
+  })
 }
 
 /**

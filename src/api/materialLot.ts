@@ -16,12 +16,16 @@ export interface MaterialLot {
   locId: string
   locCode?: string
   currentQty: number
+  arrivalQty?: number
   unit?: string
+  unitName?: string
   productionDate?: string
   produceDate?: string
   expiryDate?: string
   receiptStatus?: number
   receiptStatusLabel?: string
+  operatorId?: string
+  operatorName?: string
   updateTime?: string
 }
 
@@ -62,12 +66,13 @@ export interface MaterialLotTransferForm {
 }
 
 export interface MaterialLotRegisterForm {
-  itemId: number
+  itemId?: number
   itemType: number
   supId?: number
   supplierId?: number
   totalQuantity: number
-  unit?: string
+  arrivalQty?: number
+  inputUnit?: string
   productionDate?: string
   expiryDate?: string
 }
@@ -111,12 +116,19 @@ function normalizeMaterialLot(raw: any): MaterialLot {
     locId: String(raw?.locId ?? ''),
     locCode: raw?.locCode,
     currentQty: Number(raw?.currentQty ?? 0),
+    arrivalQty: raw?.arrivalQty !== undefined && raw?.arrivalQty !== null ? Number(raw.arrivalQty) : undefined,
     unit: raw?.unit,
+    unitName: raw?.unitName,
     productionDate,
     produceDate: raw?.produceDate,
     expiryDate: raw?.expiryDate,
     receiptStatus: raw?.receiptStatus,
     receiptStatusLabel: raw?.receiptStatusLabel,
+    operatorId:
+      raw?.operatorId !== undefined && raw?.operatorId !== null
+        ? String(raw.operatorId)
+        : undefined,
+    operatorName: raw?.operatorName,
     updateTime: raw?.updateTime,
   }
 }
@@ -158,6 +170,7 @@ function normalizeMaterialLotRegisterInfo(raw: any): MaterialLotRegisterInfo {
 export function getMaterialLotList(params: {
   pageNum?: number
   pageSize?: number
+  batchNo?: string
   itemCode?: string
   itemId?: string | number
   itemType?: number
@@ -188,6 +201,9 @@ export function addMaterialLot(data: MaterialLotForm) {
 export function registerMaterialLot(data: MaterialLotRegisterForm) {
   const payload = {
     ...data,
+    ...(data.inputUnit ? { unit: data.inputUnit } : {}),
+    ...(data.inputUnit ? { inputUnit: data.inputUnit } : {}),
+    arrivalQty: data.arrivalQty ?? data.totalQuantity,
     ...(data.supId !== undefined ? { supplierId: data.supId } : {}),
     ...(data.supId !== undefined ? { supplier_id: data.supId } : {}),
     ...(data.supplierId !== undefined ? { supplier_id: data.supplierId } : {}),

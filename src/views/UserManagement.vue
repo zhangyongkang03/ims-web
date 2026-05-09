@@ -76,9 +76,10 @@
           v-model:page-size="pagination.pageSize"
           :page-sizes="[10, 20, 50, 100]"
           :total="pagination.total"
+          :hide-on-single-page="false"
           layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleSearch"
-          @current-change="handleSearch"
+          @size-change="handlePageSizeChange"
+          @current-change="handleCurrentPageChange"
         />
       </div>
     </el-card>
@@ -90,28 +91,38 @@
       width="600px"
       @close="handleDialogClose"
     >
-      <el-form ref="formRef" :model="form" :rules="formRules" label-width="100px">
+      <el-form ref="formRef" :model="form" :rules="formRules" label-width="100px" scroll-to-error>
         <el-form-item label="用户名" prop="username">
-          <el-input v-model="form.username" :disabled="isEdit" />
+          <el-input
+            v-model="form.username"
+            :disabled="isEdit"
+            @blur="validateFieldIfNeeded('username')"
+          />
         </el-form-item>
         <el-form-item label="密码" :prop="isEdit ? '' : 'password'">
           <el-input
             v-model="form.password"
             type="password"
             :placeholder="isEdit ? '不修改请留空' : '请输入密码'"
+            @blur="validateFieldIfNeeded('password')"
           />
         </el-form-item>
         <el-form-item label="昵称" prop="nickname">
-          <el-input v-model="form.nickname" />
+          <el-input v-model="form.nickname" @blur="validateFieldIfNeeded('nickname')" />
         </el-form-item>
         <el-form-item label="工号" prop="employeeNo">
-          <el-input v-model="form.employeeNo" />
+          <el-input v-model="form.employeeNo" @blur="validateFieldIfNeeded('employeeNo')" />
         </el-form-item>
         <el-form-item label="状态" prop="status">
           <el-switch v-model="form.status" active-text="启用" inactive-text="禁用" />
         </el-form-item>
         <el-form-item label="角色" prop="roleIds">
-          <el-select v-model="form.roleIds" multiple placeholder="请选择角色">
+          <el-select
+            v-model="form.roleIds"
+            multiple
+            placeholder="请选择角色"
+            @change="validateFieldIfNeeded('roleIds')"
+          >
             <el-option
               v-for="role in roleOptions"
               :key="role.id"
@@ -132,6 +143,7 @@
 <script setup lang="ts">
 import { getRoleList, type Role } from '@/api/role'
 import { addUser, deleteUser, getUserList, updateUser, type User, type UserForm } from '@/api/user'
+import { useDeferredFormValidation } from '@/composables/useDeferredFormValidation'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
 
@@ -155,6 +167,8 @@ const dialogVisible = ref(false)
 const dialogTitle = ref('')
 const isEdit = ref(false)
 const formRef = ref<FormInstance>()
+const { enableInteractionValidation, resetInteractionValidation, validateFieldIfNeeded } =
+  useDeferredFormValidation(formRef)
 
 const form = reactive<UserForm>({
   username: '',
@@ -166,11 +180,11 @@ const form = reactive<UserForm>({
 })
 
 const formRules: FormRules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-  nickname: [{ required: true, message: '请输入昵称', trigger: 'blur' }],
-  employeeNo: [{ required: true, message: '请输入工号', trigger: 'blur' }],
-  roleIds: [{ required: true, message: '请选择角色', trigger: 'change' }],
+  username: [{ required: true, message: '请输入用户名' }],
+  password: [{ required: true, message: '请输入密码' }],
+  nickname: [{ required: true, message: '请输入昵称' }],
+  employeeNo: [{ required: true, message: '请输入工号' }],
+  roleIds: [{ required: true, message: '请选择角色' }],
 }
 
 // 加载用户列表
@@ -208,6 +222,17 @@ const handleSearch = () => {
   loadUserList()
 }
 
+const handleCurrentPageChange = (pageNum: number) => {
+  pagination.pageNum = pageNum
+  loadUserList()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
+  pagination.pageNum = 1
+  loadUserList()
+}
+
 // 重置
 const handleReset = () => {
   searchForm.searchKey = ''
@@ -217,6 +242,7 @@ const handleReset = () => {
 
 // 新增
 const handleAdd = () => {
+  resetInteractionValidation()
   isEdit.value = false
   dialogTitle.value = '新增用户'
   dialogVisible.value = true
@@ -224,6 +250,7 @@ const handleAdd = () => {
 
 // 编辑
 const handleEdit = (row: User) => {
+  resetInteractionValidation()
   isEdit.value = true
   dialogTitle.value = '编辑用户'
   form.id = row.id
@@ -258,29 +285,33 @@ const handleSubmit = async () => {
   if (!formRef.value) return
 
   await formRef.value.validate(async (valid) => {
-    if (valid) {
-      submitLoading.value = true
-      try {
-        if (isEdit.value) {
-          await updateUser(form.id!, form)
-          ElMessage.success('更新成功')
-        } else {
-          await addUser(form)
-          ElMessage.success('新增成功')
-        }
-        dialogVisible.value = false
-        loadUserList()
-      } catch (error) {
-        console.error('提交失败:', error)
-      } finally {
-        submitLoading.value = false
+    if (!valid) {
+      enableInteractionValidation()
+      return
+    }
+
+    submitLoading.value = true
+    try {
+      if (isEdit.value) {
+        await updateUser(form.id!, form)
+        ElMessage.success('更新成功')
+      } else {
+        await addUser(form)
+        ElMessage.success('新增成功')
       }
+      dialogVisible.value = false
+      loadUserList()
+    } catch (error) {
+      console.error('提交失败:', error)
+    } finally {
+      submitLoading.value = false
     }
   })
 }
 
 // 关闭对话框
 const handleDialogClose = () => {
+  resetInteractionValidation()
   formRef.value?.resetFields()
   form.id = undefined
   form.username = ''

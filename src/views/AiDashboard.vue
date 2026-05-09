@@ -61,7 +61,8 @@
               <div class="line-item compact-line">
                 <span class="line-label">实时值：</span>
                 <span class="line-content">
-                  {{ formatRealtimeValue(item.fastRisk.currentValue) }} {{ realtimeUnit(item.fastRisk.processType) }}
+                  {{ formatRealtimeValue(item.fastRisk.currentValue) }}
+                  {{ realtimeUnit(item.fastRisk.processType) }}
                 </span>
               </div>
               <el-progress
@@ -71,7 +72,10 @@
               />
               <div class="quick-metrics">
                 <span>快速风险：{{ item.fastRisk.riskFast.toFixed(2) }}</span>
-                <span>趋势：{{ slopeArrow(item.fastRisk.slope) }} {{ trendLabel(item.fastRisk.slope) }}</span>
+                <span
+                  >趋势：{{ slopeArrow(item.fastRisk.slope) }}
+                  {{ trendLabel(item.fastRisk.slope) }}</span
+                >
                 <span>ETA：{{ formatEta(item.fastRisk.etaSeconds) }}</span>
               </div>
             </div>
@@ -95,7 +99,10 @@
 
             <div class="line-item">
               <span class="line-label">分析原因：</span>
-              <span class="line-content" v-html="highlightKb(item.aiAnalysis?.reason || '-')"></span>
+              <span
+                class="line-content"
+                v-html="highlightKb(item.aiAnalysis?.reason || '-')"
+              ></span>
             </div>
             <div class="line-item">
               <span class="line-label">操作建议：</span>
@@ -171,6 +178,7 @@
         v-model:page-size="historyPagination.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         :total="historyPagination.total"
+        :hide-on-single-page="false"
         layout="total, sizes, prev, pager, next, jumper"
         class="pagination"
         @change="loadHistory"
@@ -181,7 +189,12 @@
 
 <script setup lang="ts">
 import { getAiHistory, getAiLatest, type AiAnalysisResult } from '@/api/ai'
-import { getAlarmList, getUnhandledAlarmCount, type AlarmPushData, type AlarmRecord } from '@/api/alarm'
+import {
+  getAlarmList,
+  getUnhandledAlarmCount,
+  type AlarmPushData,
+  type AlarmRecord,
+} from '@/api/alarm'
 import { getProductionStats } from '@/api/dashboard'
 import { getDeviceList } from '@/api/device'
 import { useDictData } from '@/composables/useDictData'
@@ -294,11 +307,17 @@ const cardList = computed<DashboardCardItem[]>(() => {
     })
 })
 
-const highRiskCount = computed(() => cardList.value.filter((item) => item.displayRiskScore >= 0.8).length)
-const midRiskCount = computed(
-  () => cardList.value.filter((item) => item.displayRiskScore >= 0.6 && item.displayRiskScore < 0.8).length,
+const highRiskCount = computed(
+  () => cardList.value.filter((item) => item.displayRiskScore >= 0.8).length,
 )
-const lowRiskCount = computed(() => cardList.value.filter((item) => item.displayRiskScore < 0.6).length)
+const midRiskCount = computed(
+  () =>
+    cardList.value.filter((item) => item.displayRiskScore >= 0.6 && item.displayRiskScore < 0.8)
+      .length,
+)
+const lowRiskCount = computed(
+  () => cardList.value.filter((item) => item.displayRiskScore < 0.6).length,
+)
 
 const clamp01 = (num: number) => Math.min(1, Math.max(0, Number(num || 0)))
 

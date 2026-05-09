@@ -1,5 +1,69 @@
+import type { AuthMenu } from '@/api/auth'
+import { normalizeMenuPath } from '@/constants/menuPathMap'
+import { useUserStore } from '@/stores/user'
 import Layout from '@/views/Layout.vue'
 import { createRouter, createWebHistory } from 'vue-router'
+
+const hasValidToken = () => {
+  const token = localStorage.getItem('token')?.trim()
+  return Boolean(token && token !== 'null' && token !== 'undefined')
+}
+
+const dynamicRouteNamePrefix = 'DynamicMenuAlias__'
+let lastDynamicMenuSignature = ''
+
+const normalizeRouteName = (path: string) =>
+  `${dynamicRouteNamePrefix}${path.replace(/[^a-zA-Z0-9]/g, '_')}`
+
+const buildMenuSignature = (menus: AuthMenu[]) => {
+  const paths: string[] = []
+  const visit = (items: AuthMenu[] = []) => {
+    items.forEach((item) => {
+      if (!item || typeof item.path !== 'string') return
+      paths.push(item.path.trim())
+      if (Array.isArray(item.children) && item.children.length > 0) {
+        visit(item.children)
+      }
+    })
+  }
+  visit(menus)
+  return paths.sort().join('|')
+}
+
+const registerDynamicMenuRoutes = (menus: AuthMenu[]) => {
+  const signature = buildMenuSignature(menus)
+  if (signature && signature === lastDynamicMenuSignature) {
+    return
+  }
+
+  const visit = (items: AuthMenu[] = []) => {
+    items.forEach((item) => {
+      if (!item || typeof item.path !== 'string') return
+
+      const backendPath = item.path.trim()
+      if (!backendPath.startsWith('/')) return
+
+      const frontendPath = normalizeMenuPath(backendPath)
+      if (frontendPath && frontendPath !== backendPath) {
+        const routeName = normalizeRouteName(backendPath)
+        if (!router.hasRoute(routeName)) {
+          router.addRoute({
+            path: backendPath,
+            name: routeName,
+            redirect: frontendPath,
+          })
+        }
+      }
+
+      if (Array.isArray(item.children) && item.children.length > 0) {
+        visit(item.children)
+      }
+    })
+  }
+
+  visit(menus)
+  lastDynamicMenuSignature = signature
+}
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -8,6 +72,10 @@ const router = createRouter({
       path: '/login',
       name: 'Login',
       component: () => import('@/views/Login.vue'),
+    },
+    {
+      path: '/ai/settings',
+      redirect: '/ai/dashboard',
     },
     {
       path: '/',
@@ -128,11 +196,6 @@ const router = createRouter({
           component: () => import('@/views/AiRules.vue'),
         },
         {
-          path: 'ai/settings',
-          name: 'AiModelSettings',
-          component: () => import('@/views/AiModelSettings.vue'),
-        },
-        {
           path: 'ai/batch-quality',
           name: 'BatchQualityReport',
           component: () => import('@/views/BatchQualityReport.vue'),
@@ -202,14 +265,14 @@ const router = createRouter({
         },
         // 设备模块
         {
-          path: 'equipment/equipment',
-          name: 'EquipmentManagement',
-          component: () => import('@/views/EquipmentManagement.vue'),
-        },
-        {
           path: 'equipment/station',
           name: 'StationManagement',
           component: () => import('@/views/StationManagement.vue'),
+        },
+        {
+          path: 'equipment/equipment',
+          name: 'EquipmentManagement',
+          component: () => import('@/views/EquipmentManagement.vue'),
         },
         {
           path: 'equipment/device/:stationId?',
@@ -227,19 +290,45 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token')
+router.beforeEach(async (to, from, next) => {
+  const authenticated = hasValidToken()
+  const userStore = useUserStore()
 
   // 如果没有token且访问的不是登录页，跳转到登录页
-  if (!token && to.path !== '/login') {
+  if (!authenticated && to.path !== '/login') {
+    localStorage.removeItem('token')
+    userStore.clearUserInfo()
     next('/login')
+    return
   }
+
+  if (authenticated && !userStore.authInfoLoaded) {
+    try {
+      await userStore.loadAuthInfo()
+      registerDynamicMenuRoutes(userStore.menus)
+    } catch (error) {
+      console.error('加载登录信息失败:', error)
+      userStore.clearUserInfo()
+      if (to.path !== '/login') {
+        next('/login')
+        return
+      }
+      next()
+      return
+    }
+  }
+
+  if (authenticated && userStore.authInfoLoaded) {
+    registerDynamicMenuRoutes(userStore.menus)
+  }
+
   // 如果有token且访问的是登录页，跳转到首页
-  else if (token && to.path === '/login') {
+  if (authenticated && to.path === '/login') {
     next('/dashboard')
-  } else {
-    next()
+    return
   }
+
+  next()
 })
 
 export default router

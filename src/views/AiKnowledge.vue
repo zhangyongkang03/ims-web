@@ -73,6 +73,7 @@
         v-model:page-size="pagination.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         :total="pagination.total"
+        :hide-on-single-page="false"
         layout="total, sizes, prev, pager, next, jumper"
         class="pagination"
         @change="getList"
@@ -81,7 +82,7 @@
 
     <!-- 新增/编辑弹窗 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="560px">
-      <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px">
+      <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px" scroll-to-error>
         <el-form-item label="故障关键词" prop="symptomKeyword">
           <el-input v-model="formData.symptomKeyword" placeholder="如：温度波动" />
         </el-form-item>
@@ -162,16 +163,20 @@ import {
   type AiKnowledgeItem,
   type ProcessType,
 } from '@/api/ai'
+import { useDictData } from '@/composables/useDictData'
+import { DICT_TYPE } from '@/constants/dict'
 import type { FormInstance } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useDictData } from '@/composables/useDictData'
-import { DICT_TYPE } from '@/constants/dict'
 
-const { options: processDictOptions, getLabel: getProcessLabel, load: loadProcessDict } = useDictData(DICT_TYPE.PROCESS_TYPE)
+const {
+  options: processDictOptions,
+  getLabel: getProcessLabel,
+  load: loadProcessDict,
+} = useDictData(DICT_TYPE.PROCESS_TYPE)
 
 const processOptions = computed(() =>
-  processDictOptions.value.map((d) => ({ value: d.dictValue, label: d.dictLabel }))
+  processDictOptions.value.map((d) => ({ value: d.dictValue, label: d.dictLabel })),
 )
 
 const loading = ref(false)
@@ -197,11 +202,11 @@ const formData = reactive<AiKnowledgeForm>({
 })
 
 const rules = {
-  symptomKeyword: [{ required: true, message: '故障关键词不能为空', trigger: 'blur' }],
-  processType: [{ required: true, message: '工序不能为空', trigger: 'change' }],
-  possibleCause: [{ required: true, message: '可能原因不能为空', trigger: 'blur' }],
-  solutionSuggestion: [{ required: true, message: '解决方案不能为空', trigger: 'blur' }],
-  expertLevel: [{ required: true, message: '权重不能为空', trigger: 'change' }],
+  symptomKeyword: [{ required: true, message: '故障关键词不能为空' }],
+  processType: [{ required: true, message: '工序不能为空' }],
+  possibleCause: [{ required: true, message: '可能原因不能为空' }],
+  solutionSuggestion: [{ required: true, message: '解决方案不能为空' }],
+  expertLevel: [{ required: true, message: '权重不能为空' }],
 }
 
 const testDialogVisible = ref(false)

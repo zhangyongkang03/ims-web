@@ -17,7 +17,7 @@ export interface Craft {
 // 工艺方案表单
 export interface CraftForm {
   id?: number
-  productId: number
+  productId?: number
   recipeName: string
   isDefault: boolean
   remark?: string

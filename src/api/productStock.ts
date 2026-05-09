@@ -45,6 +45,7 @@ export interface ProductShipRecord {
   quantity: number
   shipTime?: string
   operatorId?: string
+  operatorName?: string
 }
 
 export interface ShippableOrder {
@@ -92,8 +93,11 @@ export interface ProductPending {
   putAwayQty: number
   pendingQty: number
   uom?: string
+  uomName?: string
   state?: number
   stateLabel?: string
+  operatorId?: string
+  operatorName?: string
   createTime?: string
 }
 
@@ -151,6 +155,7 @@ function normalizeShipRecord(raw: any): ProductShipRecord {
       raw?.operatorId !== undefined && raw?.operatorId !== null
         ? String(raw?.operatorId)
         : undefined,
+    operatorName: raw?.operatorName,
   }
 }
 
@@ -199,8 +204,14 @@ function normalizeProductPending(raw: any): ProductPending {
     putAwayQty: Number(raw?.putAwayQty ?? raw?.putawayqty ?? 0),
     pendingQty: Number(raw?.pendingQty ?? raw?.pendingqty ?? 0),
     uom: raw?.uom,
+    uomName: raw?.uomName ?? raw?.uomname,
     state: raw?.state ?? raw?.status,
     stateLabel: raw?.stateLabel ?? raw?.statusLabel,
+    operatorId:
+      raw?.operatorId !== undefined && raw?.operatorId !== null
+        ? String(raw?.operatorId)
+        : undefined,
+    operatorName: raw?.operatorName,
     createTime: raw?.createTime ?? raw?.createtime,
   }
 }
@@ -218,6 +229,8 @@ export function getProductStockList(params: { pageNum?: number; pageSize?: numbe
 export function getProductPendingList(params: {
   pageNum?: number
   pageSize?: number
+  receiveNo?: string
+  batchNo?: string
   pId?: number
   state?: number
 }) {
@@ -276,7 +289,8 @@ export function getProductReceiveRecordList(params: {
 export function getProductShipRecordList(params: {
   pageNum?: number
   pageSize?: number
-  batchNo?: string
+  shipNo?: string
+  woNo?: string
   customerName?: string
 }) {
   return request

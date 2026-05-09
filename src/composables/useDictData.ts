@@ -22,9 +22,9 @@ export function useDictData(dictType: DictTypeCode) {
   const options = ref<DictData[]>([])
   const labelMap = ref<Record<string, string>>({})
 
-  const load = async () => {
+  const load = async (params?: { category?: string }) => {
     try {
-      const res = await getDictDataList(dictType)
+      const res = await getDictDataList(dictType, params)
       const list = res.data as DictData[]
       options.value = list
       labelMap.value = Object.fromEntries(list.map((d) => [d.dictValue, d.dictLabel]))

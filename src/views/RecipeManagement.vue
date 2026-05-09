@@ -11,6 +11,12 @@
       <!-- 搜索表单 -->
       <div class="search-form">
         <el-input
+          v-model="searchForm.recipeCode"
+          placeholder="搜索配方编码"
+          clearable
+          class="search-input"
+        />
+        <el-input
           v-model="searchForm.searchKey"
           placeholder="搜索配方名称"
           clearable
@@ -35,6 +41,11 @@
         <el-table-column prop="recipeName" label="配方名称" width="150" />
         <el-table-column prop="pname" label="关联产品" width="150" />
         <el-table-column prop="baseQty" label="基础产量" width="100" />
+        <el-table-column prop="baseUnitName" label="基准单位" width="100">
+          <template #default="scope">
+            {{ scope.row.baseUnitName || scope.row.baseUnit }}
+          </template>
+        </el-table-column>
         <el-table-column
           prop="isActive"
           label="状态"
@@ -63,8 +74,10 @@
         v-model:page-size="pagination.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         :total="pagination.total"
+        :hide-on-single-page="false"
         layout="total, sizes, prev, pager, next, jumper"
-        @change="getList"
+        @current-change="handleCurrentPageChange"
+        @size-change="handlePageSizeChange"
         class="pagination"
       />
     </el-card>
@@ -77,23 +90,28 @@
         :rules="rules"
         label-width="100px"
         label-position="right"
+        scroll-to-error
       >
         <el-form-item v-if="dialogType === 'edit'" label="配方编码">
           <el-input v-model="formData.recipeCode" disabled />
         </el-form-item>
         <el-form-item label="配方名称" prop="recipeName">
-          <el-input v-model="formData.recipeName" />
+          <el-input v-model="formData.recipeName" @blur="validateFieldIfNeeded('recipeName')" />
         </el-form-item>
         <el-form-item label="关联产品" prop="pId">
-          <el-select v-model="formData.pId" placeholder="选择产品">
+          <el-select v-model="formData.pId" placeholder="选择产品" @change="handleProductChange">
             <el-option v-for="p in productList" :key="p.pid" :label="p.pname" :value="p.pid" />
           </el-select>
         </el-form-item>
         <el-form-item label="基础产量" prop="baseQty">
-          <el-input-number v-model="formData.baseQty" :min="0" />
+          <el-input-number
+            v-model="formData.baseQty"
+            :min="0"
+            @change="validateFieldIfNeeded('baseQty')"
+          />
         </el-form-item>
         <el-form-item label="状态" prop="isActive">
-          <el-select v-model="formData.isActive">
+          <el-select v-model="formData.isActive" @change="validateFieldIfNeeded('isActive')">
             <el-option label="启用" :value="1" />
             <el-option label="禁用" :value="0" />
           </el-select>
@@ -110,7 +128,7 @@
 </template>
 
 <script setup lang="ts">
-import { getProductList, type Product } from '@/api/product'
+import { getProductOptions, type Product } from '@/api/product'
 import {
   addRecipe,
   deleteRecipe,
@@ -119,6 +137,7 @@ import {
   type Recipe,
   type RecipeForm,
 } from '@/api/recipe'
+import { useDeferredFormValidation } from '@/composables/useDeferredFormValidation'
 import type { FormInstance } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
@@ -129,6 +148,8 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const dialogType = ref<'add' | 'edit'>('add')
 const formRef = ref<FormInstance>()
+const { enableInteractionValidation, resetInteractionValidation, validateFieldIfNeeded } =
+  useDeferredFormValidation(formRef)
 const tableData = ref<Recipe[]>([])
 const productList = ref<Product[]>([])
 
@@ -139,25 +160,38 @@ const pagination = reactive({
 })
 
 const searchForm = reactive({
+  recipeCode: '',
   searchKey: '',
   isActive: undefined,
 })
 
 const formData = reactive<RecipeForm>({
-  pId: 0,
+  pId: undefined,
   recipeCode: '',
   recipeName: '',
   baseQty: 1000,
+  baseUnit: '',
   isActive: 1,
 })
 
 const rules = {
-  recipeName: [{ required: true, message: '配方名称不能为空', trigger: 'blur' }],
-  pId: [{ required: true, message: '关联产品不能为空', trigger: 'change' }],
-  baseQty: [{ required: true, message: '基础产量不能为空', trigger: 'blur' }],
+  recipeName: [{ required: true, message: '配方名称不能为空' }],
+  pId: [{ required: true, message: '关联产品不能为空' }],
+  baseQty: [{ required: true, message: '基础产量不能为空' }],
+  baseUnit: [{ required: true, message: '基准单位不能为空' }],
 }
 
 const dialogTitle = ref('新增配方')
+
+const syncBaseUnitByProduct = (productId?: number) => {
+  const product = productList.value.find((item) => item.pid === productId)
+  formData.baseUnit = product?.punit || ''
+}
+
+const handleProductChange = (value?: number) => {
+  syncBaseUnitByProduct(value)
+  validateFieldIfNeeded('pId')
+}
 
 const getList = async () => {
   loading.value = true
@@ -165,11 +199,12 @@ const getList = async () => {
     const res = await getRecipeList({
       pageNum: pagination.pageNum,
       pageSize: pagination.pageSize,
+      recipeCode: searchForm.recipeCode,
       searchKey: searchForm.searchKey,
       isActive: searchForm.isActive,
     })
-    tableData.value = res.data.records
-    pagination.total = res.data.total
+    tableData.value = res.data.records || []
+    pagination.total = Number(res.data.total || 0)
   } catch (error) {
     console.error('获取配方列表失败:', error)
   } finally {
@@ -179,8 +214,8 @@ const getList = async () => {
 
 const loadProductList = async () => {
   try {
-    const res = await getProductList({ pageSize: 1000 })
-    productList.value = res.data.records
+    const res = await getProductOptions()
+    productList.value = res.data
   } catch (error) {
     console.error('加载产品列表失败:', error)
   }
@@ -191,7 +226,19 @@ const handleSearch = () => {
   getList()
 }
 
+const handleCurrentPageChange = (pageNum: number) => {
+  pagination.pageNum = pageNum
+  getList()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
+  pagination.pageNum = 1
+  getList()
+}
+
 const handleReset = () => {
+  searchForm.recipeCode = ''
   searchForm.searchKey = ''
   searchForm.isActive = undefined
   pagination.pageNum = 1
@@ -199,19 +246,22 @@ const handleReset = () => {
 }
 
 const openDialog = (type: 'add' | 'edit') => {
+  resetInteractionValidation()
   dialogType.value = type
   dialogTitle.value = type === 'add' ? '新增配方' : '编辑配方'
   dialogVisible.value = true
 
   if (type === 'add') {
     formData.recipeName = ''
-    formData.pId = 0
+    formData.pId = undefined
     formData.baseQty = 1000
+    formData.baseUnit = ''
     formData.isActive = 1
   }
 }
 
 const handleEdit = (row: Recipe) => {
+  resetInteractionValidation()
   dialogType.value = 'edit'
   dialogTitle.value = '编辑配方'
   dialogVisible.value = true
@@ -221,6 +271,7 @@ const handleEdit = (row: Recipe) => {
   formData.recipeName = row.recipeName
   formData.pId = row.pid
   formData.baseQty = row.baseQty
+  formData.baseUnit = row.baseUnit || ''
   formData.isActive = row.isActive
 }
 
@@ -235,7 +286,10 @@ const handleSubmit = async () => {
   if (!formRef.value) return
 
   await formRef.value.validate(async (valid) => {
-    if (!valid) return
+    if (!valid) {
+      enableInteractionValidation()
+      return
+    }
 
     try {
       if (dialogType.value === 'add') {
@@ -312,7 +366,8 @@ onMounted(() => {
 
 .pagination {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .dialog-footer {

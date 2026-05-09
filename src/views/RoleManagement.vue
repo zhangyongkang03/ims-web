@@ -32,7 +32,7 @@
       width="500px"
       @close="handleDialogClose"
     >
-      <el-form ref="formRef" :model="form" :rules="formRules" label-width="100px">
+      <el-form ref="formRef" :model="form" :rules="formRules" label-width="100px" scroll-to-error>
         <el-form-item label="角色名称" prop="roleName">
           <el-input v-model="form.roleName" />
         </el-form-item>
@@ -106,8 +106,8 @@ const treeProps = {
 }
 
 const formRules: FormRules = {
-  roleName: [{ required: true, message: '请输入角色名称', trigger: 'blur' }],
-  roleKey: [{ required: true, message: '请输入角色标识', trigger: 'blur' }],
+  roleName: [{ required: true, message: '请输入角色名称' }],
+  roleKey: [{ required: true, message: '请输入角色标识' }],
 }
 
 // 加载角色列表

@@ -12,6 +12,7 @@
         :rules="loginRules"
         class="login-form"
         @submit.prevent="handleLogin"
+        scroll-to-error
       >
         <el-form-item prop="username">
           <el-input
@@ -48,10 +49,6 @@
           </el-button>
         </el-form-item>
       </el-form>
-
-      <div class="login-footer">
-        <p>默认账号：admin / 123456</p>
-      </div>
     </div>
   </div>
 </template>
@@ -70,13 +67,13 @@ const loginFormRef = ref<FormInstance>()
 const loading = ref(false)
 
 const loginForm = reactive({
-  username: 'admin',
-  password: '123456',
+  username: '',
+  password: '',
 })
 
 const loginRules: FormRules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+  username: [{ required: true, message: '请输入用户名' }],
+  password: [{ required: true, message: '请输入密码' }],
 }
 
 const handleLogin = async () => {
@@ -88,6 +85,7 @@ const handleLogin = async () => {
       try {
         const res = await login(loginForm)
         userStore.setToken(res.data)
+        await userStore.loadAuthInfo(true)
         ElMessage.success('登录成功')
         router.push('/dashboard')
       } catch (error) {

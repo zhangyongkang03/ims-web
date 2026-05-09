@@ -36,6 +36,7 @@
         v-model:page-size="pagination.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         :total="pagination.total"
+        :hide-on-single-page="false"
         layout="total, sizes, prev, pager, next, jumper"
         @change="getList"
         class="pagination"
@@ -50,22 +51,29 @@
         :rules="rules"
         label-width="100px"
         label-position="right"
+        scroll-to-error
       >
         <el-form-item label="物料" prop="mId">
-          <el-select v-model="formData.mId" placeholder="选择物料">
+          <el-select v-model="formData.mId" placeholder="选择物料" @change="handleMaterialChange">
             <el-option v-for="m in materialList" :key="m.mid" :label="m.mname" :value="m.mid" />
           </el-select>
         </el-form-item>
         <el-form-item label="标准数量" prop="standardQty">
           <el-input-number v-model="formData.standardQty" :min="0" />
         </el-form-item>
-        <el-form-item label="单位" prop="unit">
-          <el-select v-model="formData.unit" placeholder="请选择单位">
+        <el-form-item label="单位" prop="inputUnit">
+          <el-select
+            v-model="formData.inputUnit"
+            :disabled="!formData.mId"
+            :loading="compatibleUnitsLoading"
+            :placeholder="formData.mId ? '选择单位' : '请先选择物料'"
+            class="unit-select"
+          >
             <el-option
-              v-for="item in unitTypeOptions"
-              :key="item.dictValue"
-              :label="item.dictLabel"
-              :value="item.dictValue"
+              v-for="item in compatibleUnitOptions"
+              :key="item.unit"
+              :label="item.label"
+              :value="item.unit"
             />
           </el-select>
         </el-form-item>
@@ -81,7 +89,7 @@
 </template>
 
 <script setup lang="ts">
-import { getMaterialList, type Material } from '@/api/material'
+import { getMaterialOptions, type Material } from '@/api/material'
 import {
   addRecipeDetail,
   deleteRecipeDetail,
@@ -90,8 +98,8 @@ import {
   type RecipeDetail,
   type RecipeDetailForm,
 } from '@/api/recipe'
-import { useDictData } from '@/composables/useDictData'
-import { DICT_TYPE } from '@/constants/dict'
+import { getCompatibleUnits, type CompatibleUnitOption } from '@/api/unitConversion'
+import { useUnitDict } from '@/composables/useUnitDict'
 import type { FormInstance } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
@@ -107,12 +115,10 @@ const dialogType = ref<'add' | 'edit'>('add')
 const formRef = ref<FormInstance>()
 const tableData = ref<RecipeDetail[]>([])
 const materialList = ref<Material[]>([])
+const compatibleUnitOptions = ref<CompatibleUnitOption[]>([])
+const compatibleUnitsLoading = ref(false)
 
-const {
-  options: unitTypeOptions,
-  getLabel: getUnitTypeLabel,
-  load: loadUnitTypeDict,
-} = useDictData(DICT_TYPE.UNIT_TYPE)
+const { loadUnitLabelMap, getUnitLabel: getUnitTypeLabel } = useUnitDict()
 
 const pagination = reactive({
   pageNum: 1,
@@ -125,15 +131,59 @@ const formData = reactive<RecipeDetailForm>({
   mId: 0,
   standardQty: 0,
   unit: '',
+  inputUnit: '',
 })
 
 const rules = {
-  mId: [{ required: true, message: '物料不能为空', trigger: 'change' }],
-  standardQty: [{ required: true, message: '标准数量不能为空', trigger: 'blur' }],
-  unit: [{ required: true, message: '单位不能为空', trigger: 'blur' }],
+  mId: [{ required: true, message: '物料不能为空' }],
+  standardQty: [{ required: true, message: '标准数量不能为空' }],
+  inputUnit: [{ required: true, message: '单位不能为空' }],
 }
 
 const dialogTitle = ref('新增明细')
+
+const findMaterialById = (materialId?: number) =>
+  materialList.value.find((item) => item.mid === materialId)
+
+const loadCompatibleUnitOptions = async (materialId?: number, preferredUnit?: string) => {
+  const material = findMaterialById(materialId)
+  const baseUnit = material?.unit || ''
+
+  formData.unit = baseUnit
+  compatibleUnitOptions.value = []
+
+  if (!baseUnit) {
+    formData.inputUnit = ''
+    return
+  }
+
+  try {
+    compatibleUnitsLoading.value = true
+    const res = await getCompatibleUnits(baseUnit)
+    const options = res.data || []
+    const hasBaseUnit = options.some((item) => item.unit === baseUnit)
+    compatibleUnitOptions.value = hasBaseUnit
+      ? options
+      : [{ unit: baseUnit, label: getUnitTypeLabel(baseUnit) || baseUnit }, ...options]
+
+    const defaultUnit = preferredUnit || baseUnit
+    formData.inputUnit = compatibleUnitOptions.value.some((item) => item.unit === defaultUnit)
+      ? defaultUnit
+      : baseUnit
+  } catch (error) {
+    console.error('加载兼容单位失败:', error)
+    compatibleUnitOptions.value = [
+      { unit: baseUnit, label: getUnitTypeLabel(baseUnit) || baseUnit },
+    ]
+    formData.inputUnit = baseUnit
+  } finally {
+    compatibleUnitsLoading.value = false
+  }
+}
+
+const handleMaterialChange = async (materialId?: number) => {
+  await loadCompatibleUnitOptions(materialId)
+}
 
 const getList = async () => {
   loading.value = true
@@ -154,8 +204,8 @@ const getList = async () => {
 
 const loadMaterialList = async () => {
   try {
-    const res = await getMaterialList({ pageSize: 1000 })
-    materialList.value = res.data.records
+    const res = await getMaterialOptions()
+    materialList.value = res.data
   } catch (error) {
     console.error('加载物料列表失败:', error)
   }
@@ -167,21 +217,25 @@ const openDialog = (type: 'add' | 'edit') => {
   dialogVisible.value = true
 
   if (type === 'add') {
+    compatibleUnitOptions.value = []
     formData.mId = 0
     formData.standardQty = 0
     formData.unit = ''
+    formData.inputUnit = ''
   }
 }
 
-const handleEdit = (row: RecipeDetail) => {
+const handleEdit = async (row: RecipeDetail) => {
   dialogType.value = 'edit'
   dialogTitle.value = '编辑明细'
   dialogVisible.value = true
+  compatibleUnitOptions.value = []
 
   formData.detailId = row.detailId
   formData.mId = row.mid
   formData.standardQty = row.standardQty
   formData.unit = row.unit
+  await loadCompatibleUnitOptions(row.mid, row.inputUnit || row.unit)
 }
 
 const handleSubmit = async () => {
@@ -234,7 +288,7 @@ const goBack = () => {
 onMounted(() => {
   getList()
   loadMaterialList()
-  loadUnitTypeDict()
+  loadUnitLabelMap()
 })
 </script>
 
@@ -260,5 +314,9 @@ onMounted(() => {
 
 .dialog-footer {
   text-align: right;
+}
+
+.unit-select {
+  width: 220px;
 }
 </style>

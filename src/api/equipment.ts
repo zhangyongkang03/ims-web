@@ -37,6 +37,23 @@ export interface PageResult<T> {
   records: T[]
 }
 
+function normalizeEquipment(raw: any): Equipment {
+  return {
+    equipId: String(raw?.equipId ?? ''),
+    equipCode: String(raw?.equipCode ?? ''),
+    equipName: String(raw?.equipName ?? ''),
+    model: raw?.model ? String(raw.model) : '',
+    stationId: Number(raw?.stationId ?? 0),
+    stationName: raw?.stationName ? String(raw.stationName) : '',
+    status: Number(raw?.status ?? 0),
+    statusLabel: raw?.statusLabel ? String(raw.statusLabel) : '',
+    installDate: raw?.installDate,
+    expiryDate: raw?.expiryDate,
+    createTime: raw?.createTime,
+    sensorCount: raw?.sensorCount == null ? 0 : Number(raw.sensorCount),
+  }
+}
+
 export function getEquipmentList(params: {
   pageNum?: number
   pageSize?: number
@@ -44,11 +61,25 @@ export function getEquipmentList(params: {
   stationId?: number
   status?: number
 }) {
-  return request.get<ApiResponse<PageResult<Equipment>>>('/equipments', { params })
+  return request.get<ApiResponse<PageResult<Equipment>>>('/equipments', { params }).then((res) => ({
+    ...res,
+    data: {
+      ...res.data,
+      total: Number(res.data?.total ?? 0),
+      records: (res.data?.records || []).map(normalizeEquipment),
+    },
+  }))
 }
 
 export function getEquipmentDetail(equipId: string | number) {
-  return request.get<ApiResponse<EquipmentDetail>>(`/equipments/${equipId}`)
+  return request.get<ApiResponse<EquipmentDetail>>(`/equipments/${equipId}`).then((res) => ({
+    ...res,
+    data: {
+      ...res.data,
+      equipment: normalizeEquipment(res.data?.equipment),
+      sensors: res.data?.sensors || [],
+    },
+  }))
 }
 
 export function addEquipment(data: EquipmentForm) {

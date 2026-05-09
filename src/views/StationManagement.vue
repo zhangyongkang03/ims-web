@@ -50,9 +50,6 @@
             <el-button link type="primary" size="small" @click="handleEdit(scope.row)"
               >编辑</el-button
             >
-            <el-button link type="warning" size="small" @click="handleDevice(scope.row)"
-              >关联设备</el-button
-            >
             <el-button link type="danger" size="small" @click="handleDelete(scope.row)"
               >删除</el-button
             >
@@ -61,15 +58,19 @@
       </el-table>
 
       <!-- 分页 -->
-      <el-pagination
-        v-model:current-page="pagination.pageNum"
-        v-model:page-size="pagination.pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="pagination.total"
-        layout="total, sizes, prev, pager, next, jumper"
-        @change="getList"
-        class="pagination"
-      />
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="pagination.pageNum"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="pagination.total"
+          :hide-on-single-page="false"
+          layout="total, sizes, prev, pager, next, jumper"
+          @current-change="getList"
+          @size-change="getList"
+          class="pagination"
+        />
+      </div>
     </el-card>
 
     <!-- 编辑/新增对话框 -->
@@ -80,6 +81,7 @@
         :rules="rules"
         label-width="100px"
         label-position="right"
+        scroll-to-error
       >
         <el-form-item v-if="dialogType === 'edit'" label="工位编码">
           <el-input v-model="formData.stationCode" disabled />
@@ -131,9 +133,7 @@ import { DICT_TYPE } from '@/constants/dict'
 import type { FormInstance } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 
-const router = useRouter()
 const loading = ref(false)
 const dialogVisible = ref(false)
 const dialogType = ref<'add' | 'edit'>('add')
@@ -155,7 +155,7 @@ const pagination = reactive({
 
 const searchForm = reactive({
   searchKey: '',
-  searchStatus: undefined,
+  searchStatus: 1,
 })
 
 const formData = reactive<StationForm>({
@@ -167,10 +167,10 @@ const formData = reactive<StationForm>({
 })
 
 const rules = {
-  stationName: [{ required: true, message: '工位名称不能为空', trigger: 'blur' }],
-  processType: [{ required: true, message: '工位类型不能为空', trigger: 'change' }],
-  sortOrder: [{ required: true, message: '排序不能为空', trigger: 'blur' }],
-  status: [{ required: true, message: '状态不能为空', trigger: 'blur' }],
+  stationName: [{ required: true, message: '工位名称不能为空' }],
+  processType: [{ required: true, message: '工位类型不能为空' }],
+  sortOrder: [{ required: true, message: '排序不能为空' }],
+  status: [{ required: true, message: '状态不能为空' }],
 }
 
 const dialogTitle = ref('新增工位')
@@ -200,7 +200,7 @@ const handleSearch = () => {
 
 const handleReset = () => {
   searchForm.searchKey = ''
-  searchForm.searchStatus = undefined
+  searchForm.searchStatus = 1
   pagination.pageNum = 1
   getList()
 }
@@ -229,13 +229,6 @@ const handleEdit = (row: Station) => {
   formData.processType = row.processType
   formData.sortOrder = row.sortOrder
   formData.status = row.status
-}
-
-const handleDevice = (row: Station) => {
-  router.push({
-    name: 'DeviceManagement',
-    params: { stationId: row.stationId },
-  })
 }
 
 const handleSubmit = async () => {
@@ -315,9 +308,10 @@ loadProcessTypeDict()
   width: 150px;
 }
 
-.pagination {
+.pagination-container {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .dialog-footer {

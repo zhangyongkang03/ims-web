@@ -53,14 +53,28 @@
             v-model:page-size="stockPagination.pageSize"
             :page-sizes="[10, 20, 50, 100]"
             :total="stockPagination.total"
+            :hide-on-single-page="false"
             layout="total, sizes, prev, pager, next, jumper"
             class="pagination"
-            @change="loadStockList"
+            @current-change="handleStockPageChange"
+            @size-change="handleStockPageSizeChange"
           />
         </el-tab-pane>
 
         <el-tab-pane label="产品入库" name="pending">
           <div class="search-form">
+            <el-input
+              v-model="pendingSearch.receiveNo"
+              placeholder="入库编号"
+              clearable
+              class="search-input"
+            />
+            <el-input
+              v-model="pendingSearch.batchNo"
+              placeholder="批次号"
+              clearable
+              class="search-input"
+            />
             <el-select
               v-model="pendingSearch.pId"
               placeholder="选择产品"
@@ -88,13 +102,19 @@
 
           <el-table :data="pendingTableData" stripe v-loading="pendingLoading">
             <el-table-column prop="receiveNo" label="入库编号" width="210" />
-            <el-table-column prop="receiveId" label="入库记录ID" width="180" />
             <el-table-column prop="pName" label="产品名称" width="180" />
             <el-table-column prop="batchNo" label="批次号" width="160" />
             <el-table-column prop="quantity" label="总数量" width="120" />
-            <el-table-column prop="putAwayQty" label="已入库" width="120" />
-            <el-table-column prop="pendingQty" label="待入库" width="120" />
-            <el-table-column prop="uom" label="单位" width="100" />
+            <el-table-column prop="uomName" label="单位" width="100">
+              <template #default="scope">
+                {{ scope.row.uomName || scope.row.uom || '--' }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="operatorName" label="操作员" width="120">
+              <template #default="scope">
+                {{ scope.row.operatorName || '--' }}
+              </template>
+            </el-table-column>
             <el-table-column prop="stateLabel" label="状态" width="120" />
             <el-table-column prop="createTime" label="生成时间" min-width="180" />
             <el-table-column label="操作" width="120" fixed="right">
@@ -117,17 +137,25 @@
             v-model:page-size="pendingPagination.pageSize"
             :page-sizes="[10, 20, 50, 100]"
             :total="pendingPagination.total"
+            :hide-on-single-page="false"
             layout="total, sizes, prev, pager, next, jumper"
             class="pagination"
-            @change="loadPendingList"
+            @current-change="handlePendingPageChange"
+            @size-change="handlePendingPageSizeChange"
           />
         </el-tab-pane>
 
         <el-tab-pane label="出库记录" name="ship">
           <div class="search-form">
             <el-input
-              v-model="shipSearch.batchNo"
-              placeholder="批次号"
+              v-model="shipSearch.shipNo"
+              placeholder="出库单号"
+              clearable
+              class="search-input"
+            />
+            <el-input
+              v-model="shipSearch.woNo"
+              placeholder="工单号"
               clearable
               class="search-input"
             />
@@ -145,10 +173,13 @@
             <el-table-column prop="shipNo" label="出库单号" width="210" />
             <el-table-column prop="woNo" label="工单号" width="180" />
             <el-table-column prop="productName" label="产品名称" width="180" />
-            <el-table-column prop="batchNo" label="批次号" width="160" />
             <el-table-column prop="customerName" label="客户名称" width="180" />
             <el-table-column prop="quantity" label="数量" width="120" />
-            <el-table-column prop="operatorId" label="操作员" width="100" />
+            <el-table-column prop="operatorName" label="操作员" width="120">
+              <template #default="scope">
+                {{ scope.row.operatorName || scope.row.operatorId || '--' }}
+              </template>
+            </el-table-column>
             <el-table-column prop="shipTime" label="出库时间" min-width="180" />
           </el-table>
 
@@ -157,9 +188,11 @@
             v-model:page-size="shipPagination.pageSize"
             :page-sizes="[10, 20, 50, 100]"
             :total="shipPagination.total"
+            :hide-on-single-page="false"
             layout="total, sizes, prev, pager, next, jumper"
             class="pagination"
-            @change="loadShipRecords"
+            @current-change="handleShipPageChange"
+            @size-change="handleShipPageSizeChange"
           />
         </el-tab-pane>
       </el-tabs>
@@ -182,15 +215,17 @@
         :rules="putAwayRules"
         inline
         class="putaway-form"
+        scroll-to-error
       >
         <el-form-item label="目标仓库" prop="whId">
           <el-select
             v-model="putAwayForm.whId"
             placeholder="请选择仓库"
+            :validate-event="false"
             @change="handlePutAwayWhChange"
           >
             <el-option
-              v-for="wh in warehouseList"
+              v-for="wh in productWarehouseList"
               :key="wh.whId"
               :label="wh.whName"
               :value="wh.whId"
@@ -198,7 +233,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="目标库位" prop="locId">
-          <el-select v-model="putAwayForm.locId" placeholder="请选择库位">
+          <el-select v-model="putAwayForm.locId" placeholder="请选择库位" :validate-event="false">
             <el-option
               v-for="loc in putAwayLocationList"
               :key="loc.locId"
@@ -208,20 +243,18 @@
           </el-select>
         </el-form-item>
         <el-form-item label="上架数量" prop="quantity">
-          <el-input-number v-model="putAwayForm.quantity" :min="0" :precision="2" />
+          <el-input-number
+            v-model="putAwayForm.quantity"
+            :min="0"
+            :precision="2"
+            :validate-event="false"
+          />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleAddPutAwayPlan">加入上架清单</el-button>
           <el-button @click="handlePutAwayAll">全部入库</el-button>
         </el-form-item>
       </el-form>
-
-      <div class="plan-summary" v-if="currentPending">
-        <span>总数量: {{ currentPending.quantity }} {{ currentPending.uom || '' }}</span>
-        <span>已入库: {{ currentPending.putAwayQty }} {{ currentPending.uom || '' }}</span>
-        <span>待入库: {{ currentPending.pendingQty }} {{ currentPending.uom || '' }}</span>
-        <span>本次计划入库: {{ plannedPutAwayQuantity }} {{ currentPending.uom || '' }}</span>
-      </div>
 
       <el-table :data="putAwayPlanList" stripe size="small" style="width: 100%">
         <el-table-column prop="whName" label="目标仓库" min-width="140" />
@@ -245,7 +278,13 @@
     </el-dialog>
 
     <el-dialog v-model="shipDialogVisible" title="产品出库（按工单）" width="560px">
-      <el-form ref="shipFormRef" :model="shipForm" :rules="shipRules" label-width="100px">
+      <el-form
+        ref="shipFormRef"
+        :model="shipForm"
+        :rules="shipRules"
+        label-width="100px"
+        scroll-to-error
+      >
         <el-form-item label="工单" prop="woId">
           <el-select
             v-model="shipForm.woId"
@@ -254,9 +293,9 @@
             style="width: 100%"
           >
             <el-option
-              v-for="order in shippableOrderList"
+              v-for="order in closedShippableOrderList"
               :key="order.woId"
-              :label="`${order.woNo} | ${order.productName || '-'} | ${order.customerName || '未绑定客户'} | 订单可出:${order.shippableQty ?? 0} | 库存:${order.currentStock ?? 0}`"
+              :label="`${order.woNo} | ${order.productName || '-'} | ${order.customerName || '未绑定客户'} | 状态:已关闭 | 订单可出:${order.shippableQty ?? 0} | 库存:${order.currentStock ?? 0}`"
               :value="order.woId"
             />
           </el-select>
@@ -271,7 +310,15 @@
           <el-input :model-value="String(shipMaxQty)" disabled />
         </el-form-item>
         <el-form-item label="数量" prop="quantity">
-          <el-input-number v-model="shipForm.quantity" :min="0" :max="shipMaxQty" :precision="2" />
+          <div class="ship-quantity-inline">
+            <el-input-number
+              v-model="shipForm.quantity"
+              :min="0"
+              :max="shipMaxQty"
+              :precision="2"
+            />
+            <el-button @click="handleShipAll">全部出库</el-button>
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -286,7 +333,7 @@
 
 <script setup lang="ts">
 import { getLocationList, type Location } from '@/api/location'
-import { getProductList, type Product } from '@/api/product'
+import { getProductOptions, type Product } from '@/api/product'
 import {
   getProductPendingDetail,
   getProductPendingList,
@@ -305,7 +352,7 @@ import {
 import { getWarehouseAll, type Warehouse } from '@/api/warehouse'
 import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -315,6 +362,10 @@ const productList = ref<Product[]>([])
 const warehouseList = ref<Warehouse[]>([])
 const shippableOrderList = ref<ShippableOrder[]>([])
 
+const productWarehouseList = computed(() =>
+  warehouseList.value.filter((warehouse) => Number(warehouse.whType) === 2),
+)
+
 const stockLoading = ref(false)
 const stockTableData = ref<ProductStock[]>([])
 const stockSearch = reactive<{ pId?: number }>({ pId: undefined })
@@ -322,16 +373,24 @@ const stockPagination = reactive({ pageNum: 1, pageSize: 10, total: 0 })
 
 const pendingLoading = ref(false)
 const pendingTableData = ref<ProductPending[]>([])
-const pendingSearch = reactive<{ pId?: number; state?: number }>({
+const pendingSearch = reactive<{
+  receiveNo: string
+  batchNo: string
+  pId?: number
+  state?: number
+}>({
+  receiveNo: '',
+  batchNo: '',
   pId: undefined,
-  state: undefined,
+  state: 0,
 })
 const pendingPagination = reactive({ pageNum: 1, pageSize: 10, total: 0 })
 
 const shipLoading = ref(false)
 const shipTableData = ref<ProductShipRecord[]>([])
-const shipSearch = reactive<{ batchNo: string; customerName: string }>({
-  batchNo: '',
+const shipSearch = reactive<{ shipNo: string; woNo: string; customerName: string }>({
+  shipNo: '',
+  woNo: '',
   customerName: '',
 })
 const shipPagination = reactive({ pageNum: 1, pageSize: 10, total: 0 })
@@ -371,19 +430,23 @@ const shipForm = reactive<ProductShipForm>({
 })
 
 const putAwayRules = {
-  whId: [{ required: true, message: '目标仓库不能为空', trigger: 'change' }],
-  locId: [{ required: true, message: '目标库位不能为空', trigger: 'change' }],
-  quantity: [{ required: true, message: '数量不能为空', trigger: 'blur' }],
+  whId: [{ required: true, message: '目标仓库不能为空' }],
+  locId: [{ required: true, message: '目标库位不能为空' }],
+  quantity: [{ required: true, message: '数量不能为空' }],
 }
 
 const shipRules = {
-  woId: [{ required: true, message: '请选择工单', trigger: 'change' }],
-  quantity: [{ required: true, message: '数量不能为空', trigger: 'blur' }],
+  woId: [{ required: true, message: '请选择工单' }],
+  quantity: [{ required: true, message: '数量不能为空' }],
 }
 
 const selectedShippableOrder = computed(() => {
   return shippableOrderList.value.find((item) => item.woId === shipForm.woId)
 })
+
+const closedShippableOrderList = computed(() =>
+  shippableOrderList.value.filter((item) => Number(item.status) === 3),
+)
 
 const shipMaxQty = computed(() => {
   const orderShippable = Number(selectedShippableOrder.value?.shippableQty ?? 0)
@@ -402,8 +465,8 @@ const remainingPlannableQuantity = computed(() => {
 
 const loadProducts = async () => {
   try {
-    const res = await getProductList({ pageSize: 1000 })
-    productList.value = res.data.records || []
+    const res = await getProductOptions()
+    productList.value = res.data || []
   } catch (error) {
     console.error('加载产品列表失败:', error)
   }
@@ -436,7 +499,7 @@ const loadStockList = async () => {
       pId: stockSearch.pId,
     })
     stockTableData.value = res.data.records || []
-    stockPagination.total = res.data.total || 0
+    stockPagination.total = Number(res.data.total || 0)
   } catch (error) {
     console.error('获取产成品库存失败:', error)
   } finally {
@@ -450,11 +513,13 @@ const loadPendingList = async () => {
     const res = await getProductPendingList({
       pageNum: pendingPagination.pageNum,
       pageSize: pendingPagination.pageSize,
+      receiveNo: pendingSearch.receiveNo.trim() || undefined,
+      batchNo: pendingSearch.batchNo.trim() || undefined,
       pId: pendingSearch.pId,
       state: pendingSearch.state,
     })
     pendingTableData.value = res.data.records || []
-    pendingPagination.total = res.data.total || 0
+    pendingPagination.total = Number(res.data.total || 0)
   } catch (error) {
     console.error('获取待入库列表失败:', error)
   } finally {
@@ -468,11 +533,12 @@ const loadShipRecords = async () => {
     const res = await getProductShipRecordList({
       pageNum: shipPagination.pageNum,
       pageSize: shipPagination.pageSize,
-      batchNo: shipSearch.batchNo,
-      customerName: shipSearch.customerName,
+      shipNo: shipSearch.shipNo.trim() || undefined,
+      woNo: shipSearch.woNo.trim() || undefined,
+      customerName: shipSearch.customerName.trim() || undefined,
     })
     shipTableData.value = res.data.records || []
-    shipPagination.total = res.data.total || 0
+    shipPagination.total = Number(res.data.total || 0)
   } catch (error) {
     console.error('获取出库记录失败:', error)
   } finally {
@@ -493,6 +559,17 @@ const handleStockSearch = () => {
 
 const handleStockReset = () => {
   stockSearch.pId = undefined
+  stockPagination.pageNum = 1
+  loadStockList()
+}
+
+const handleStockPageChange = (pageNum: number) => {
+  stockPagination.pageNum = pageNum
+  loadStockList()
+}
+
+const handleStockPageSizeChange = (pageSize: number) => {
+  stockPagination.pageSize = pageSize
   stockPagination.pageNum = 1
   loadStockList()
 }
@@ -518,8 +595,21 @@ const handlePendingSearch = () => {
 }
 
 const handlePendingReset = () => {
+  pendingSearch.receiveNo = ''
+  pendingSearch.batchNo = ''
   pendingSearch.pId = undefined
   pendingSearch.state = undefined
+  pendingPagination.pageNum = 1
+  loadPendingList()
+}
+
+const handlePendingPageChange = (pageNum: number) => {
+  pendingPagination.pageNum = pageNum
+  loadPendingList()
+}
+
+const handlePendingPageSizeChange = (pageSize: number) => {
+  pendingPagination.pageSize = pageSize
   pendingPagination.pageNum = 1
   loadPendingList()
 }
@@ -530,8 +620,20 @@ const handleShipSearch = () => {
 }
 
 const handleShipReset = () => {
-  shipSearch.batchNo = ''
+  shipSearch.shipNo = ''
+  shipSearch.woNo = ''
   shipSearch.customerName = ''
+  shipPagination.pageNum = 1
+  loadShipRecords()
+}
+
+const handleShipPageChange = (pageNum: number) => {
+  shipPagination.pageNum = pageNum
+  loadShipRecords()
+}
+
+const handleShipPageSizeChange = (pageSize: number) => {
+  shipPagination.pageSize = pageSize
   shipPagination.pageNum = 1
   loadShipRecords()
 }
@@ -556,10 +658,7 @@ const openPutAwayDialog = async (row: ProductPending) => {
     const res = await getProductPendingDetail(row.receiveId)
     currentPending.value = res.data
     putAwayForm.receiveId = row.receiveId
-    putAwayForm.whId = ''
-    putAwayForm.locId = ''
-    putAwayForm.quantity = 0
-    putAwayLocationList.value = []
+    resetPutAwayForm()
     putAwayPlanList.value = []
     putAwayDialogVisible.value = true
   } catch (error) {
@@ -567,16 +666,40 @@ const openPutAwayDialog = async (row: ProductPending) => {
   }
 }
 
+const resetPutAwayForm = () => {
+  putAwayForm.whId = ''
+  putAwayForm.locId = ''
+  putAwayForm.quantity = 0
+  putAwayLocationList.value = []
+  nextTick(() => {
+    putAwayFormRef.value?.clearValidate(['whId', 'locId', 'quantity'])
+  })
+}
+
 const openShipDialog = async () => {
   await loadShippableOrderList()
-  if (shippableOrderList.value.length === 0) {
-    ElMessage.warning('当前没有可出库的客户工单')
+  if (closedShippableOrderList.value.length === 0) {
+    ElMessage.warning('当前没有已关闭且可出库的客户工单')
     return
   }
 
   shipDialogVisible.value = true
   shipForm.woId = ''
   shipForm.quantity = 0
+}
+
+const handleShipAll = () => {
+  if (!shipForm.woId) {
+    ElMessage.warning('请先选择工单')
+    return
+  }
+
+  if (shipMaxQty.value <= 0) {
+    ElMessage.warning('当前没有可全部出库的数量')
+    return
+  }
+
+  shipForm.quantity = shipMaxQty.value
 }
 
 const handleAddPutAwayPlan = async () => {
@@ -611,10 +734,7 @@ const appendPutAwayPlan = (quantity: number) => {
     quantity,
   })
 
-  putAwayForm.whId = ''
-  putAwayForm.locId = ''
-  putAwayForm.quantity = 0
-  putAwayLocationList.value = []
+  resetPutAwayForm()
 }
 
 const removePutAwayPlan = (index: number) => {
@@ -665,6 +785,11 @@ const handleShipSubmit = async () => {
 
   await shipFormRef.value.validate(async (valid) => {
     if (!valid) return
+
+    if (Number(selectedShippableOrder.value?.status) !== 3) {
+      ElMessage.error('只有已关闭的工单才能出库')
+      return
+    }
 
     if (shipForm.quantity <= 0) {
       ElMessage.error('出库数量必须大于0')
@@ -768,7 +893,15 @@ onMounted(() => {
 
 .pagination {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ship-quantity-inline {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  align-items: center;
 }
 
 .pending-info {

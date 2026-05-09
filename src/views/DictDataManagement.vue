@@ -55,6 +55,7 @@
         :rules="rules"
         label-width="100px"
         label-position="right"
+        scroll-to-error
       >
         <el-form-item label="显示标签" prop="dictLabel">
           <el-input v-model="formData.dictLabel" placeholder="如：生产中" />
@@ -120,9 +121,9 @@ const formData = reactive<DictDataForm>({
 })
 
 const rules = {
-  dictLabel: [{ required: true, message: '显示标签不能为空', trigger: 'blur' }],
-  dictValue: [{ required: true, message: '键值不能为空', trigger: 'blur' }],
-  dictSort: [{ required: true, message: '排序号不能为空', trigger: 'blur' }],
+  dictLabel: [{ required: true, message: '显示标签不能为空' }],
+  dictValue: [{ required: true, message: '键值不能为空' }],
+  dictSort: [{ required: true, message: '排序号不能为空' }],
 }
 
 const dialogTitle = ref('新增字典数据')

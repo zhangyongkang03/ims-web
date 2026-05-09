@@ -65,6 +65,7 @@
         v-model:page-size="pagination.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         :total="pagination.total"
+        :hide-on-single-page="false"
         layout="total, sizes, prev, pager, next, jumper"
         @change="getList"
         class="pagination"
@@ -79,6 +80,7 @@
         :rules="rules"
         label-width="100px"
         label-position="right"
+        scroll-to-error
       >
         <el-form-item label="工序类型" prop="processType">
           <el-select v-model="formData.processType" placeholder="选择工序类型">
@@ -113,14 +115,35 @@
           <el-input-number v-model="formData.maxThreshold" :precision="2" :step="0.1" />
         </el-form-item>
         <el-form-item label="单位" prop="unit">
-          <el-select v-model="formData.unit" placeholder="请选择单位">
-            <el-option
-              v-for="item in unitTypeOptions"
-              :key="item.dictValue"
-              :label="item.dictLabel"
-              :value="item.dictValue"
-            />
-          </el-select>
+          <div class="unit-inline">
+            <el-select
+              v-model="formState.unitCategory"
+              placeholder="请选择单位类型"
+              clearable
+              class="unit-inline-select"
+              @change="handleUnitCategoryChange"
+            >
+              <el-option
+                v-for="item in unitCategoryOptions"
+                :key="item.dictValue"
+                :label="item.dictLabel"
+                :value="item.dictValue"
+              />
+            </el-select>
+            <el-select
+              v-if="formState.unitCategory"
+              v-model="formData.unit"
+              placeholder="请选择单位"
+              class="unit-inline-select"
+            >
+              <el-option
+                v-for="item in unitTypeOptions"
+                :key="item.dictValue"
+                :label="item.dictLabel"
+                :value="item.dictValue"
+              />
+            </el-select>
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -144,6 +167,7 @@ import {
 } from '@/api/craft'
 import { getDeviceList, type Device } from '@/api/device'
 import { useDictData } from '@/composables/useDictData'
+import { useUnitDict } from '@/composables/useUnitDict'
 import { DICT_TYPE } from '@/constants/dict'
 import type { FormInstance } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -168,11 +192,16 @@ const {
   load: loadProcessTypeDict,
 } = useDictData(DICT_TYPE.PROCESS_TYPE)
 
+const { options: unitCategoryOptions, load: loadUnitCategoryDict } = useDictData(
+  DICT_TYPE.UNIT_CATEGORY,
+)
+
 const {
-  options: unitTypeOptions,
-  getLabel: getUnitTypeLabel,
-  load: loadUnitTypeDict,
-} = useDictData(DICT_TYPE.UNIT_TYPE)
+  unitOptions: unitTypeOptions,
+  loadUnitsByCategory,
+  loadUnitLabelMap,
+  getUnitLabel: getUnitTypeLabel,
+} = useUnitDict()
 
 const pagination = reactive({
   pageNum: 1,
@@ -197,17 +226,26 @@ const formData = reactive<CraftDetailForm>({
   unit: '',
 })
 
+const formState = reactive({
+  unitCategory: '',
+})
+
 const rules = {
-  processType: [{ required: true, message: '工序类型不能为空', trigger: 'change' }],
-  deviceCode: [{ required: true, message: '设备不能为空', trigger: 'change' }],
-  parameterName: [{ required: true, message: '参数名称不能为空', trigger: 'blur' }],
-  targetValue: [{ required: true, message: '目标值不能为空', trigger: 'blur' }],
-  maxThreshold: [{ required: true, message: '上限阈值不能为空', trigger: 'blur' }],
-  minThreshold: [{ required: true, message: '下限阈值不能为空', trigger: 'blur' }],
-  unit: [{ required: true, message: '单位不能为空', trigger: 'blur' }],
+  processType: [{ required: true, message: '工序类型不能为空' }],
+  deviceCode: [{ required: true, message: '设备不能为空' }],
+  parameterName: [{ required: true, message: '参数名称不能为空' }],
+  targetValue: [{ required: true, message: '目标值不能为空' }],
+  maxThreshold: [{ required: true, message: '上限阈值不能为空' }],
+  minThreshold: [{ required: true, message: '下限阈值不能为空' }],
+  unit: [{ required: true, message: '单位不能为空' }],
 }
 
 const dialogTitle = ref('新增参数')
+
+const handleUnitCategoryChange = async (category?: string) => {
+  formData.unit = ''
+  await loadUnitsByCategory(category)
+}
 
 const getList = async () => {
   loading.value = true
@@ -253,6 +291,7 @@ const openDialog = (type: 'add' | 'edit') => {
   dialogVisible.value = true
 
   if (type === 'add') {
+    formState.unitCategory = ''
     formData.id = undefined
     formData.deviceCode = ''
     formData.processType = ''
@@ -261,13 +300,16 @@ const openDialog = (type: 'add' | 'edit') => {
     formData.maxThreshold = 0
     formData.minThreshold = 0
     formData.unit = ''
+    loadUnitsByCategory()
   }
 }
 
-const handleEdit = (row: CraftDetail) => {
+const handleEdit = async (row: CraftDetail) => {
   dialogType.value = 'edit'
   dialogTitle.value = '编辑参数'
   dialogVisible.value = true
+  formState.unitCategory = ''
+  await loadUnitsByCategory()
 
   formData.id = row.id
   formData.recipeId = row.recipeId
@@ -331,7 +373,8 @@ onMounted(() => {
   getList()
   loadDeviceOptions()
   loadProcessTypeDict()
-  loadUnitTypeDict()
+  loadUnitsByCategory()
+  loadUnitCategoryDict().then(() => loadUnitLabelMap(unitCategoryOptions.value))
 })
 </script>
 
@@ -368,5 +411,15 @@ onMounted(() => {
 
 .dialog-footer {
   text-align: right;
+}
+
+.unit-inline {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.unit-inline-select {
+  width: 180px;
 }
 </style>

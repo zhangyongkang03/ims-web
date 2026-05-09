@@ -41,6 +41,27 @@ export interface PageResult<T> {
   records: T[]
 }
 
+function normalizeDevice(raw: any): Device {
+  return {
+    deviceId: String(raw?.deviceId ?? ''),
+    stationId: Number(raw?.stationId ?? 0),
+    stationName: raw?.stationName ? String(raw.stationName) : '',
+    equipId: raw?.equipId !== undefined && raw?.equipId !== null ? String(raw.equipId) : undefined,
+    equipName: raw?.equipName ? String(raw.equipName) : '',
+    deviceCode: String(raw?.deviceCode ?? ''),
+    deviceName: raw?.deviceName ? String(raw.deviceName) : '',
+    deviceType: String(raw?.deviceType ?? ''),
+    sensorCategory: raw?.sensorCategory ?? null,
+    sensorCategoryLabel: raw?.sensorCategoryLabel ? String(raw.sensorCategoryLabel) : '',
+    kafkaTopic: raw?.kafkaTopic ? String(raw.kafkaTopic) : '',
+    redisKey: raw?.redisKey ? String(raw.redisKey) : '',
+    status: Number(raw?.status ?? 0),
+    statusLabel: raw?.statusLabel ? String(raw.statusLabel) : '',
+    createTime: raw?.createTime,
+    updateTime: raw?.updateTime,
+  }
+}
+
 /**
  * 分页查询设备列表
  */
@@ -51,14 +72,24 @@ export function getDeviceList(params: {
   deviceName?: string
   stationId?: number
 }) {
-  return request.get<ApiResponse<PageResult<Device>>>('/devices', { params })
+  return request.get<ApiResponse<PageResult<Device>>>('/devices', { params }).then((res) => ({
+    ...res,
+    data: {
+      ...res.data,
+      total: Number(res.data?.total ?? 0),
+      records: (res.data?.records || []).map(normalizeDevice),
+    },
+  }))
 }
 
 /**
  * 获取设备详情
  */
 export function getDeviceDetail(deviceId: string | number) {
-  return request.get<ApiResponse<Device>>(`/devices/${deviceId}`)
+  return request.get<ApiResponse<Device>>(`/devices/${deviceId}`).then((res) => ({
+    ...res,
+    data: normalizeDevice(res.data),
+  }))
 }
 
 /**

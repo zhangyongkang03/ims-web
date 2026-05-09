@@ -76,11 +76,39 @@ export interface DictDataForm {
   remark?: string
 }
 
+function normalizeDictData(raw: any): DictData {
+  return {
+    id: raw?.id ?? 0,
+    dictType: String(raw?.dictType ?? ''),
+    dictLabel: String(raw?.dictLabel ?? raw?.label ?? ''),
+    dictValue: String(raw?.dictValue ?? raw?.value ?? ''),
+    dictSort: Number(raw?.dictSort ?? 0),
+    isDefault: Boolean(raw?.isDefault ?? false),
+    status: Boolean(raw?.status ?? true),
+    remark: raw?.remark ?? null,
+  }
+}
+
 /**
  * 按字典类型编码查询数据列表（仅启用项，按排序号升序）
  */
-export function getDictDataList(dictType: string) {
-  return request.get<ApiResponse<DictData[]>>('/dict-data', { params: { dictType } })
+export function getDictDataList(
+  dictType: string,
+  params?: {
+    category?: string
+  },
+) {
+  return request
+    .get<ApiResponse<any[]>>('/dict-data', {
+      params: {
+        dictType,
+        ...(params || {}),
+      },
+    })
+    .then((res) => ({
+      ...res,
+      data: (res.data || []).map(normalizeDictData),
+    }))
 }
 
 /**

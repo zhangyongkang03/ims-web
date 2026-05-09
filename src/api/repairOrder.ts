@@ -33,6 +33,27 @@ export interface PageResult<T> {
   records: T[]
 }
 
+function normalizeRepairOrder(raw: any): RepairOrder {
+  return {
+    repairId: String(raw?.repairId ?? ''),
+    equipId: String(raw?.equipId ?? ''),
+    equipName: raw?.equipName ? String(raw.equipName) : '',
+    equipCode: raw?.equipCode ? String(raw.equipCode) : '',
+    orderNo: raw?.orderNo ? String(raw.orderNo) : '',
+    faultDesc: raw?.faultDesc ? String(raw.faultDesc) : '',
+    sourceType: raw?.sourceType == null ? undefined : Number(raw.sourceType),
+    sourceTypeLabel: raw?.sourceTypeLabel ? String(raw.sourceTypeLabel) : '',
+    priority: raw?.priority == null ? undefined : Number(raw.priority),
+    priorityLabel: raw?.priorityLabel ? String(raw.priorityLabel) : '',
+    repairUser: raw?.repairUser ? String(raw.repairUser) : '',
+    status: Number(raw?.status ?? 0),
+    statusLabel: raw?.statusLabel ? String(raw.statusLabel) : '',
+    startTime: raw?.startTime,
+    endTime: raw?.endTime,
+    createTime: raw?.createTime,
+  }
+}
+
 export function getRepairOrderList(params: {
   pageNum?: number
   pageSize?: number
@@ -40,11 +61,21 @@ export function getRepairOrderList(params: {
   status?: number
   searchKey?: string
 }) {
-  return request.get<ApiResponse<PageResult<RepairOrder>>>('/repair-orders', { params })
+  return request.get<ApiResponse<PageResult<RepairOrder>>>('/repair-orders', { params }).then((res) => ({
+    ...res,
+    data: {
+      ...res.data,
+      total: Number(res.data?.total ?? 0),
+      records: (res.data?.records || []).map(normalizeRepairOrder),
+    },
+  }))
 }
 
 export function getRepairOrderDetail(repairId: string | number) {
-  return request.get<ApiResponse<RepairOrder>>(`/repair-orders/${repairId}`)
+  return request.get<ApiResponse<RepairOrder>>(`/repair-orders/${repairId}`).then((res) => ({
+    ...res,
+    data: normalizeRepairOrder(res.data),
+  }))
 }
 
 export function addRepairOrder(data: RepairOrderForm) {

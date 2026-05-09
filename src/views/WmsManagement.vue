@@ -57,15 +57,19 @@
         </el-table-column>
       </el-table>
 
-      <el-pagination
-        v-model:current-page="warehousePagination.pageNum"
-        v-model:page-size="warehousePagination.pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="warehousePagination.total"
-        layout="total, sizes, prev, pager, next, jumper"
-        class="pagination"
-        @change="getWarehouseListData"
-      />
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="warehousePagination.pageNum"
+          v-model:page-size="warehousePagination.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="warehousePagination.total"
+          :hide-on-single-page="false"
+          layout="total, sizes, prev, pager, next, jumper"
+          class="pagination"
+          @current-change="getWarehouseListData"
+          @size-change="getWarehouseListData"
+        />
+      </div>
     </el-card>
 
     <el-dialog v-model="warehouseDialogVisible" :title="warehouseDialogTitle" width="420px">
@@ -74,6 +78,7 @@
         :model="warehouseFormData"
         :rules="warehouseRules"
         label-width="90px"
+        scroll-to-error
       >
         <el-form-item label="仓库名称" prop="whName">
           <el-input v-model="warehouseFormData.whName" />
@@ -93,7 +98,6 @@
     </el-dialog>
   </div>
 </template>
-
 <script setup lang="ts">
 import {
   addWarehouse,
@@ -133,7 +137,7 @@ const warehouseFormData = reactive<WarehouseForm>({
 })
 
 const warehouseRules = {
-  whName: [{ required: true, message: '仓库名称不能为空', trigger: 'blur' }],
+  whName: [{ required: true, message: '仓库名称不能为空' }],
 }
 
 const getWarehouseTypeLabel = (value?: number) => {
@@ -283,8 +287,9 @@ onMounted(async () => {
   width: 160px;
 }
 
-.pagination {
+.pagination-container {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

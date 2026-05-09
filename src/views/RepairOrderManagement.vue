@@ -87,19 +87,23 @@
         </el-table-column>
       </el-table>
 
-      <el-pagination
-        v-model:current-page="pagination.pageNum"
-        v-model:page-size="pagination.pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="pagination.total"
-        layout="total, sizes, prev, pager, next, jumper"
-        class="pagination"
-        @change="getList"
-      />
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="pagination.pageNum"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="pagination.total"
+          :hide-on-single-page="false"
+          layout="total, sizes, prev, pager, next, jumper"
+          class="pagination"
+          @current-change="getList"
+          @size-change="getList"
+        />
+      </div>
     </el-card>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="520px">
-      <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px">
+      <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px" scroll-to-error>
         <el-form-item label="设备" prop="equipId">
           <el-select v-model="formData.equipId" placeholder="选择设备" filterable>
             <el-option
@@ -125,7 +129,7 @@
             <el-option label="紧急" :value="2" />
           </el-select>
         </el-form-item>
-        <el-form-item label="维修负责人">
+        <el-form-item v-if="dialogType === 'edit'" label="维修负责人">
           <el-input v-model="formData.repairUser" />
         </el-form-item>
       </el-form>
@@ -203,7 +207,7 @@ const formData = reactive<RepairOrderForm>({
 })
 
 const rules = {
-  equipId: [{ required: true, message: '设备不能为空', trigger: 'change' }],
+  equipId: [{ required: true, message: '设备不能为空' }],
 }
 
 const detailDialogVisible = ref(false)
@@ -275,7 +279,8 @@ const handleSubmit = async () => {
   await formRef.value.validate(async (valid) => {
     if (!valid) return
     if (dialogType.value === 'add') {
-      await addRepairOrder(formData)
+      const { repairUser, ...payload } = formData
+      await addRepairOrder(payload)
       ElMessage.success('报修成功')
     } else {
       await updateRepairOrder((formData as any).repairId, formData)
@@ -364,8 +369,9 @@ onMounted(() => {
 .search-select {
   width: 200px;
 }
-.pagination {
+.pagination-container {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

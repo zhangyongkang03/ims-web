@@ -15,7 +15,12 @@
 
       <div class="section-title">待入库批次（登记后可稍后入库）</div>
       <div class="search-form">
-        <el-input v-model="batchNoInput" placeholder="输入批次号并加载进度" class="search-input" clearable />
+        <el-input
+          v-model="batchNoInput"
+          placeholder="输入批次号并加载进度"
+          class="search-input"
+          clearable
+        />
         <el-button @click="handleLoadBatchNo">加载批次</el-button>
         <el-button @click="loadPendingRegisterList">刷新列表</el-button>
       </div>
@@ -30,16 +35,40 @@
         <el-table-column prop="createTime" label="登记时间" min-width="170" />
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="scope">
-            <el-button link type="primary" size="small" @click="openPutAwayDialog(scope.row)">入库</el-button>
-            <el-button link type="danger" size="small" @click="removePendingBatch(scope.row.batchNo)">移除</el-button>
+            <el-button link type="primary" size="small" @click="openPutAwayDialog(scope.row)"
+              >入库</el-button
+            >
+            <el-button
+              link
+              type="danger"
+              size="small"
+              @click="removePendingBatch(scope.row.batchNo)"
+              >移除</el-button
+            >
           </template>
         </el-table-column>
       </el-table>
 
       <div class="section-title section-gap">已入库明细</div>
       <div class="search-form">
-        <el-select v-model="searchForm.itemId" placeholder="选择物料" clearable class="search-select">
-          <el-option v-for="item in searchItemOptions" :key="item.value" :label="item.label" :value="item.value" />
+        <el-input
+          v-model="searchForm.batchNo"
+          placeholder="输入批次号"
+          clearable
+          class="search-input"
+        />
+        <el-select
+          v-model="searchForm.itemId"
+          placeholder="选择物料"
+          clearable
+          class="search-select"
+        >
+          <el-option
+            v-for="item in searchItemOptions"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
         </el-select>
         <el-select
           v-model="searchForm.whId"
@@ -48,10 +77,25 @@
           class="search-select"
           @change="handleSearchWarehouseChange"
         >
-          <el-option v-for="wh in warehouseList" :key="wh.whId" :label="wh.whName" :value="wh.whId" />
+          <el-option
+            v-for="wh in materialWarehouseList"
+            :key="wh.whId"
+            :label="wh.whName"
+            :value="wh.whId"
+          />
         </el-select>
-        <el-select v-model="searchForm.locId" placeholder="选择库位" clearable class="search-select">
-          <el-option v-for="loc in searchLocationOptions" :key="loc.locId" :label="loc.locCode" :value="loc.locId" />
+        <el-select
+          v-model="searchForm.locId"
+          placeholder="选择库位"
+          clearable
+          class="search-select"
+        >
+          <el-option
+            v-for="loc in searchLocationOptions"
+            :key="loc.locId"
+            :label="loc.locCode"
+            :value="loc.locId"
+          />
         </el-select>
         <el-button type="primary" @click="handleSearch">查询</el-button>
         <el-button @click="handleReset">重置</el-button>
@@ -67,8 +111,17 @@
         </el-table-column>
         <el-table-column prop="whName" label="仓库" width="140" />
         <el-table-column prop="locCode" label="库位" width="120" />
-        <el-table-column prop="currentQty" label="库存数量" width="120" />
-        <el-table-column prop="unit" label="单位" width="100" />
+        <el-table-column prop="arrivalQty" label="入库数量" width="120" />
+        <el-table-column prop="unitName" label="单位" width="100">
+          <template #default="scope">
+            {{ scope.row.unitName || scope.row.unit || '--' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="operatorName" label="操作员" width="120">
+          <template #default="scope">
+            {{ scope.row.operatorName || '--' }}
+          </template>
+        </el-table-column>
         <el-table-column prop="productionDate" label="生产/进货日期" width="140">
           <template #default="scope">
             {{ scope.row.productionDate || '--' }}
@@ -83,8 +136,10 @@
         v-model:page-size="pagination.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         :total="pagination.total"
+        :hide-on-single-page="false"
         layout="total, sizes, prev, pager, next, jumper"
-        @change="getList"
+        @current-change="handleCurrentPageChange"
+        @size-change="handlePageSizeChange"
         class="pagination"
       />
     </el-card>
@@ -100,29 +155,66 @@
         />
       </template>
 
-      <el-form ref="putAwayFormRef" :model="putAwayForm" :rules="putAwayRules" inline class="putaway-form">
+      <el-form
+        ref="putAwayFormRef"
+        :model="putAwayForm"
+        :rules="putAwayRules"
+        inline
+        class="putaway-form"
+        scroll-to-error
+      >
         <el-form-item label="目标仓库" prop="whId">
-          <el-select v-model="putAwayForm.whId" placeholder="请选择仓库" @change="handlePutAwayWhChange">
-            <el-option v-for="wh in warehouseList" :key="wh.whId" :label="wh.whName" :value="wh.whId" />
+          <el-select
+            v-model="putAwayForm.whId"
+            placeholder="请选择仓库"
+            :validate-event="false"
+            @change="handlePutAwayWhChange"
+          >
+            <el-option
+              v-for="wh in materialWarehouseList"
+              :key="wh.whId"
+              :label="wh.whName"
+              :value="wh.whId"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="目标库位" prop="locId">
-          <el-select v-model="putAwayForm.locId" placeholder="请选择库位">
-            <el-option v-for="loc in putAwayLocationOptions" :key="loc.locId" :label="loc.locCode" :value="loc.locId" />
+          <el-select v-model="putAwayForm.locId" placeholder="请选择库位" :validate-event="false">
+            <el-option
+              v-for="loc in putAwayLocationOptions"
+              :key="loc.locId"
+              :label="loc.locCode"
+              :value="loc.locId"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="上架数量" prop="quantity">
-          <el-input-number v-model="putAwayForm.quantity" :min="0" :precision="2" />
+          <el-input-number
+            v-model="putAwayForm.quantity"
+            :min="0"
+            :precision="2"
+            :validate-event="false"
+          />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleAddPutAwayPlan">加入上架清单</el-button>
+          <el-button @click="handlePutAwayAll">全部入库</el-button>
         </el-form-item>
       </el-form>
 
       <div class="plan-summary" v-if="currentPutAwayBatch">
-        <span>总登记数量: {{ currentPutAwayBatch.totalQuantity }} {{ currentPutAwayBatch.unit || '' }}</span>
-        <span>已上架: {{ currentPutAwayBatch.putAwayQuantity }} {{ currentPutAwayBatch.unit || '' }}</span>
-        <span>待上架: {{ currentPutAwayBatch.pendingQuantity }} {{ currentPutAwayBatch.unit || '' }}</span>
+        <span
+          >总登记数量: {{ currentPutAwayBatch.totalQuantity }}
+          {{ currentPutAwayBatch.unit || '' }}</span
+        >
+        <span
+          >已上架: {{ currentPutAwayBatch.putAwayQuantity }}
+          {{ currentPutAwayBatch.unit || '' }}</span
+        >
+        <span
+          >待上架: {{ currentPutAwayBatch.pendingQuantity }}
+          {{ currentPutAwayBatch.unit || '' }}</span
+        >
         <span>本次计划上架: {{ plannedPutAwayQuantity }} {{ currentPutAwayBatch.unit || '' }}</span>
       </div>
 
@@ -132,14 +224,18 @@
         <el-table-column prop="quantity" label="上架数量" width="120" />
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="scope">
-            <el-button link type="danger" size="small" @click="removePutAwayPlan(scope.$index)">删除</el-button>
+            <el-button link type="danger" size="small" @click="removePutAwayPlan(scope.$index)"
+              >删除</el-button
+            >
           </template>
         </el-table-column>
       </el-table>
 
       <template #footer>
         <el-button @click="putAwayDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="putAwaySubmitting" @click="handleSubmitPutAwayPlan">提交上架清单</el-button>
+        <el-button type="primary" :loading="putAwaySubmitting" @click="handleSubmitPutAwayPlan"
+          >提交上架清单</el-button
+        >
       </template>
     </el-dialog>
   </div>
@@ -147,7 +243,7 @@
 
 <script setup lang="ts">
 import { getLocationList, type Location } from '@/api/location'
-import { getMaterialList, type Material } from '@/api/material'
+import { getMaterialOptions, type Material } from '@/api/material'
 import {
   getMaterialLotList,
   getMaterialLotRegisterDetail,
@@ -159,7 +255,7 @@ import {
 import { getWarehouseAll, type Warehouse } from '@/api/warehouse'
 import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const PENDING_BATCH_STORAGE_KEY = 'material-lot-pending-batches'
@@ -200,7 +296,8 @@ const putAwayPlanList = ref<PutAwayPlanItem[]>([])
 
 const pagination = reactive({ pageNum: 1, pageSize: 10, total: 0 })
 
-const searchForm = reactive<{ itemId?: number; whId?: string; locId?: string }>({
+const searchForm = reactive<{ batchNo: string; itemId?: number; whId?: string; locId?: string }>({
+  batchNo: '',
   itemId: undefined,
   whId: undefined,
   locId: undefined,
@@ -214,13 +311,17 @@ const putAwayForm = reactive<MaterialLotPutAwayForm>({
 })
 
 const putAwayRules = {
-  whId: [{ required: true, message: '目标仓库不能为空', trigger: 'change' }],
-  locId: [{ required: true, message: '目标库位不能为空', trigger: 'change' }],
-  quantity: [{ required: true, message: '上架数量不能为空', trigger: 'blur' }],
+  whId: [{ required: true, message: '目标仓库不能为空' }],
+  locId: [{ required: true, message: '目标库位不能为空' }],
+  quantity: [{ required: true, message: '上架数量不能为空' }],
 }
 
 const searchItemOptions = computed<SelectOption[]>(() =>
   materialList.value.map((item) => ({ value: item.mid, label: item.mname })),
+)
+
+const materialWarehouseList = computed(() =>
+  warehouseList.value.filter((warehouse) => Number(warehouse.whType) === 1),
 )
 
 const activeTab = computed(() => (route.path.startsWith('/material/stock') ? 'stock' : 'lot'))
@@ -329,13 +430,14 @@ const getList = async () => {
     const res = await getMaterialLotList({
       pageNum: pagination.pageNum,
       pageSize: pagination.pageSize,
+      batchNo: searchForm.batchNo.trim() || undefined,
       itemId: searchForm.itemId,
       itemType: 1,
       whId: searchForm.whId,
       locId: searchForm.locId,
     })
     tableData.value = res.data.records || []
-    pagination.total = res.data.total || 0
+    pagination.total = Number(res.data.total || 0)
   } catch (error) {
     console.error('获取库存批次明细失败:', error)
   } finally {
@@ -345,8 +447,8 @@ const getList = async () => {
 
 const loadSelectionData = async () => {
   try {
-    const [materialRes, warehouseRes] = await Promise.all([getMaterialList({ pageSize: 1000 }), getWarehouseAll()])
-    materialList.value = materialRes.data.records || []
+    const [materialRes, warehouseRes] = await Promise.all([getMaterialOptions(), getWarehouseAll()])
+    materialList.value = materialRes.data || []
     warehouseList.value = warehouseRes.data || []
   } catch (error) {
     console.error('加载下拉数据失败:', error)
@@ -394,7 +496,19 @@ const handleSearch = () => {
   getList()
 }
 
+const handleCurrentPageChange = (pageNum: number) => {
+  pagination.pageNum = pageNum
+  getList()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
+  pagination.pageNum = 1
+  getList()
+}
+
 const handleReset = () => {
+  searchForm.batchNo = ''
   searchForm.itemId = undefined
   searchForm.whId = undefined
   searchForm.locId = undefined
@@ -406,12 +520,19 @@ const handleReset = () => {
 const openPutAwayDialog = (batch: MaterialLotRegisterInfo) => {
   currentPutAwayBatch.value = batch
   putAwayForm.batchNo = batch.batchNo
+  resetPutAwayForm()
+  putAwayPlanList.value = []
+  putAwayDialogVisible.value = true
+}
+
+const resetPutAwayForm = () => {
   putAwayForm.whId = ''
   putAwayForm.locId = ''
   putAwayForm.quantity = 0
   putAwayLocationOptions.value = []
-  putAwayPlanList.value = []
-  putAwayDialogVisible.value = true
+  nextTick(() => {
+    putAwayFormRef.value?.clearValidate(['whId', 'locId', 'quantity'])
+  })
 }
 
 const handleAddPutAwayPlan = async () => {
@@ -420,32 +541,55 @@ const handleAddPutAwayPlan = async () => {
   await putAwayFormRef.value.validate((valid) => {
     if (!valid) return
 
-    if (putAwayForm.quantity <= 0) {
-      ElMessage.error('上架数量必须大于0')
-      return
-    }
-
-    if (putAwayForm.quantity > remainingPlannableQuantity.value) {
-      ElMessage.error(`上架数量超出可分配数量，当前可分配: ${remainingPlannableQuantity.value}`)
-      return
-    }
-
-    const wh = warehouseList.value.find((item) => item.whId === putAwayForm.whId)
-    const loc = putAwayLocationOptions.value.find((item) => item.locId === putAwayForm.locId)
-
-    putAwayPlanList.value.push({
-      whId: putAwayForm.whId,
-      whName: wh?.whName || putAwayForm.whId,
-      locId: putAwayForm.locId,
-      locCode: loc?.locCode || putAwayForm.locId,
-      quantity: putAwayForm.quantity,
-    })
-
-    putAwayForm.whId = ''
-    putAwayForm.locId = ''
-    putAwayForm.quantity = 0
-    putAwayLocationOptions.value = []
+    appendPutAwayPlan(putAwayForm.quantity)
   })
+}
+
+const appendPutAwayPlan = (quantity: number) => {
+  if (quantity <= 0) {
+    ElMessage.error('上架数量必须大于0')
+    return
+  }
+
+  if (quantity > remainingPlannableQuantity.value) {
+    ElMessage.error(`上架数量超出可分配数量，当前可分配: ${remainingPlannableQuantity.value}`)
+    return
+  }
+
+  const wh = warehouseList.value.find((item) => item.whId === putAwayForm.whId)
+  const loc = putAwayLocationOptions.value.find((item) => item.locId === putAwayForm.locId)
+
+  putAwayPlanList.value.push({
+    whId: putAwayForm.whId,
+    whName: wh?.whName || putAwayForm.whId,
+    locId: putAwayForm.locId,
+    locCode: loc?.locCode || putAwayForm.locId,
+    quantity,
+  })
+
+  resetPutAwayForm()
+}
+
+const handlePutAwayAll = () => {
+  if (!currentPutAwayBatch.value) return
+
+  if (!putAwayForm.whId) {
+    ElMessage.error('请先选择目标仓库')
+    return
+  }
+
+  if (!putAwayForm.locId) {
+    ElMessage.error('请先选择目标库位')
+    return
+  }
+
+  const remaining = remainingPlannableQuantity.value
+  if (remaining <= 0) {
+    ElMessage.error('当前没有可上架数量')
+    return
+  }
+
+  appendPutAwayPlan(remaining)
 }
 
 const removePutAwayPlan = (index: number) => {
@@ -550,7 +694,8 @@ onMounted(() => {
 
 .pagination {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .register-info {

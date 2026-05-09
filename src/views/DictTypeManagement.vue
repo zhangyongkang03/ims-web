@@ -10,19 +10,7 @@
 
       <!-- 数据表格 -->
       <el-table :data="tableData" stripe style="width: 100%" v-loading="loading">
-        <el-table-column prop="dictName" label="字典名称" min-width="160">
-          <template #default="scope">
-            {{ scope.row.dictName }}
-            <el-tag
-              v-if="isBuiltIn(scope.row.dictType)"
-              type="warning"
-              size="small"
-              class="builtin-tag"
-            >
-              内置
-            </el-tag>
-          </template>
-        </el-table-column>
+        <el-table-column prop="dictName" label="字典名称" min-width="160" />
         <el-table-column prop="dictType" label="字典编码" min-width="180">
           <template #default="scope">
             <el-link type="primary" @click="handleDictData(scope.row)">
@@ -39,12 +27,7 @@
             <el-button link type="warning" size="small" @click="handleDictData(scope.row)"
               >字典数据</el-button
             >
-            <el-button
-              link
-              type="danger"
-              size="small"
-              :disabled="isBuiltIn(scope.row.dictType)"
-              @click="handleDelete(scope.row)"
+            <el-button link type="danger" size="small" @click="handleDelete(scope.row)"
               >删除</el-button
             >
           </template>
@@ -60,6 +43,7 @@
         :rules="rules"
         label-width="100px"
         label-position="right"
+        scroll-to-error
       >
         <el-form-item label="字典名称" prop="dictName">
           <el-input v-model="formData.dictName" placeholder="请输入字典名称，如：工单状态" />
@@ -94,7 +78,6 @@ import {
   type DictType,
   type DictTypeForm,
 } from '@/api/dict'
-import { SYSTEM_DICT_TYPES, SYSTEM_DICT_TYPE_SET } from '@/constants/dict'
 import type { FormInstance } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
@@ -114,44 +97,17 @@ const formData = reactive<DictTypeForm>({
 })
 
 const rules = {
-  dictName: [{ required: true, message: '字典名称不能为空', trigger: 'blur' }],
+  dictName: [{ required: true, message: '字典名称不能为空' }],
   dictType: [
-    { required: true, message: '字典编码不能为空', trigger: 'blur' },
+    { required: true, message: '字典编码不能为空' },
     {
       pattern: /^[a-z][a-z0-9_]*$/,
       message: '仅允许小写字母、数字和下划线，且以字母开头',
-      trigger: 'blur',
     },
   ],
 }
 
 const dialogTitle = ref('新增字典类型')
-
-/** 判断是否为系统内置字典类型 */
-const isBuiltIn = (dictType: string) => SYSTEM_DICT_TYPE_SET.has(dictType)
-
-/**
- * 自动同步系统内置字典类型
- * 对比后端已有列表与前端定义，缺失的自动创建
- */
-const syncSystemDictTypes = async () => {
-  try {
-    const res = await getDictTypeList()
-    const existingCodes = new Set((res.data as DictType[]).map((d) => d.dictType))
-
-    const missing = SYSTEM_DICT_TYPES.filter((d) => !existingCodes.has(d.dictType))
-    if (missing.length > 0) {
-      await Promise.all(
-        missing.map((d) =>
-          addDictType({ dictName: d.dictName, dictType: d.dictType, remark: d.remark }),
-        ),
-      )
-      ElMessage.success(`已自动初始化 ${missing.length} 个系统字典类型`)
-    }
-  } catch (error) {
-    console.error('同步系统字典类型失败:', error)
-  }
-}
 
 const getList = async () => {
   loading.value = true
@@ -220,11 +176,6 @@ const handleSubmit = async () => {
 }
 
 const handleDelete = (row: DictType) => {
-  if (isBuiltIn(row.dictType)) {
-    ElMessage.warning('系统内置字典类型不允许删除')
-    return
-  }
-
   ElMessageBox.confirm(
     `确定删除字典类型 "${row.dictName}" 吗？删除后其下所有字典数据也将失效。`,
     '警告',
@@ -248,8 +199,7 @@ const handleDelete = (row: DictType) => {
     })
 }
 
-onMounted(async () => {
-  await syncSystemDictTypes()
+onMounted(() => {
   getList()
 })
 </script>
@@ -267,10 +217,6 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.builtin-tag {
-  margin-left: 6px;
 }
 
 .dialog-footer {

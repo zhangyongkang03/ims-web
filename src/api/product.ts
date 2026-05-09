@@ -8,6 +8,8 @@ export interface Product {
   pName: string
   pSpec: string
   pUnit: string
+  spec_value?: number | string
+  spec_unit?: string
   pid: number
   pcode: string
   pname: string
@@ -25,8 +27,9 @@ export interface ProductForm {
   pId?: number
   pCode?: string
   pName: string
-  pSpec: string
   pUnit: string
+  spec_value?: number | string
+  spec_unit?: string
   shelfLife?: number
   storageCondition?: string
   status: number
@@ -42,20 +45,27 @@ function normalizeProduct(raw: any): Product {
   const pId = raw?.pId ?? raw?.pid ?? 0
   const pCode = raw?.pCode ?? raw?.pcode ?? ''
   const pName = raw?.pName ?? raw?.pname ?? ''
-  const pSpec = raw?.pSpec ?? raw?.pspec ?? ''
   const pUnit = raw?.pUnit ?? raw?.punit ?? ''
+  const spec_value = raw?.spec_value ?? raw?.specValue ?? ''
+  const spec_unit = raw?.spec_unit ?? raw?.specUnit ?? ''
+  const formattedSpecValue =
+    spec_value === undefined || spec_value === null ? '' : String(spec_value)
+  const pSpec = [formattedSpecValue, spec_unit].filter(Boolean).join('')
+  const displaySpec = [pSpec, pUnit].filter(Boolean).join('/')
 
   return {
     ...raw,
     pId,
     pCode,
     pName,
-    pSpec,
+    pSpec: displaySpec,
     pUnit,
+    spec_value,
+    spec_unit,
     pid: pId,
     pcode: pCode,
     pname: pName,
-    pspec: pSpec,
+    pspec: displaySpec,
     punit: pUnit,
   }
 }
@@ -75,6 +85,16 @@ export function getProductList(params: {
       ...res.data,
       records: (res.data.records || []).map(normalizeProduct),
     },
+  }))
+}
+
+/**
+ * 查询启用产品选项
+ */
+export function getProductOptions() {
+  return request.get<ApiResponse<any[]>>('/products/options').then((res) => ({
+    ...res,
+    data: (res.data || []).map(normalizeProduct),
   }))
 }
 

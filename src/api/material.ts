@@ -76,6 +76,16 @@ export function getMaterialList(params: {
 }
 
 /**
+ * 查询启用物料选项
+ */
+export function getMaterialOptions() {
+  return request.get<ApiResponse<any[]>>('/materials/options').then((res) => ({
+    ...res,
+    data: (res.data || []).map(normalizeMaterial),
+  }))
+}
+
+/**
  * 获取物料详情
  */
 export function getMaterialDetail(mId: number) {

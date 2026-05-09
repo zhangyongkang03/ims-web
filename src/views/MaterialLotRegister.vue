@@ -8,24 +8,64 @@
         </div>
       </template>
 
-      <el-form ref="formRef" :model="formData" :rules="rules" label-width="120px" class="register-form">
+      <el-form
+        ref="formRef"
+        :model="formData"
+        :rules="rules"
+        label-width="120px"
+        class="register-form"
+        scroll-to-error
+      >
         <el-form-item label="物料" prop="itemId">
           <el-select v-model="formData.itemId" placeholder="请选择物料" class="form-select">
-            <el-option v-for="item in materialOptions" :key="item.value" :label="item.label" :value="item.value" />
+            <el-option
+              v-for="item in materialOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="供应商" prop="supId">
-          <el-select v-model="formData.supId" placeholder="请选择供应商" clearable class="form-select">
-            <el-option v-for="item in supplierOptions" :key="item.value" :label="item.label" :value="item.value" />
+          <el-select
+            v-model="formData.supId"
+            :placeholder="formData.itemId ? '请选择供应商' : '请先选择物料'"
+            clearable
+            class="form-select"
+            :disabled="!formData.itemId"
+            :loading="supplierLoading"
+          >
+            <el-option
+              v-for="item in supplierOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="到货总数量" prop="totalQuantity">
-          <el-input-number v-model="formData.totalQuantity" :min="0" :precision="2" />
-        </el-form-item>
-        <el-form-item label="单位" prop="unit">
-          <el-select v-model="formData.unit" placeholder="请选择单位" clearable class="form-select">
-            <el-option v-for="item in unitOptions" :key="item.dictValue" :label="item.dictLabel" :value="item.dictValue" />
-          </el-select>
+          <div class="quantity-inline">
+            <el-input-number
+              v-model="formData.totalQuantity"
+              :min="0"
+              :precision="2"
+              class="quantity-input"
+            />
+            <el-select
+              v-model="formData.inputUnit"
+              :disabled="!formData.itemId"
+              :loading="compatibleUnitsLoading"
+              :placeholder="formData.itemId ? '选择单位' : '请先选择物料'"
+              class="quantity-unit-select"
+            >
+              <el-option
+                v-for="item in compatibleUnitOptions"
+                :key="item.unit"
+                :label="item.label"
+                :value="item.unit"
+              />
+            </el-select>
+          </div>
         </el-form-item>
         <el-form-item label="生产/进货日期" prop="productionDate">
           <el-date-picker v-model="formData.productionDate" type="date" value-format="YYYY-MM-DD" />
@@ -34,7 +74,9 @@
           <el-date-picker v-model="formData.expiryDate" type="date" value-format="YYYY-MM-DD" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">登记并生成批次号</el-button>
+          <el-button type="primary" :loading="submitting" @click="handleSubmit"
+            >登记并生成批次号</el-button
+          >
         </el-form-item>
       </el-form>
 
@@ -55,14 +97,17 @@
 </template>
 
 <script setup lang="ts">
-import { getMaterialList, type Material } from '@/api/material'
-import { registerMaterialLot, type MaterialLotRegisterForm, type MaterialLotRegisterInfo } from '@/api/materialLot'
-import { getSupplierList, type Supplier } from '@/api/supplier'
-import { useDictData } from '@/composables/useDictData'
-import { DICT_TYPE } from '@/constants/dict'
+import { getMaterialOptions, type Material } from '@/api/material'
+import {
+  registerMaterialLot,
+  type MaterialLotRegisterForm,
+  type MaterialLotRegisterInfo,
+} from '@/api/materialLot'
+import { getSuppliersByMaterial, type Supplier } from '@/api/supplier'
+import { getCompatibleUnits, type CompatibleUnitOption } from '@/api/unitConversion'
 import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 interface SelectOption {
@@ -75,24 +120,27 @@ const PENDING_BATCH_STORAGE_KEY = 'material-lot-pending-batches'
 const router = useRouter()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
+const supplierLoading = ref(false)
 const materialList = ref<Material[]>([])
 const supplierList = ref<Supplier[]>([])
 const registerResult = ref<MaterialLotRegisterInfo | null>(null)
-const { options: unitOptions, load: loadUnitDict } = useDictData(DICT_TYPE.UNIT_TYPE)
+const compatibleUnitOptions = ref<CompatibleUnitOption[]>([])
+const compatibleUnitsLoading = ref(false)
 
 const formData = reactive<MaterialLotRegisterForm>({
-  itemId: 0,
+  itemId: undefined,
   itemType: 1,
   supId: undefined,
   totalQuantity: 0,
-  unit: '',
+  inputUnit: '',
   productionDate: '',
   expiryDate: '',
 })
 
 const rules = {
-  itemId: [{ required: true, message: '物料不能为空', trigger: 'change' }],
-  totalQuantity: [{ required: true, message: '到货总数量不能为空', trigger: 'blur' }],
+  itemId: [{ required: true, message: '物料不能为空' }],
+  totalQuantity: [{ required: true, message: '到货总数量不能为空' }],
+  inputUnit: [{ required: true, message: '单位不能为空' }],
 }
 
 const materialOptions = computed<SelectOption[]>(() =>
@@ -100,7 +148,10 @@ const materialOptions = computed<SelectOption[]>(() =>
 )
 
 const supplierOptions = computed<SelectOption[]>(() =>
-  supplierList.value.map((item) => ({ value: item.supId, label: item.supName })),
+  supplierList.value.map((item) => ({
+    value: item.supId,
+    label: `${item.supName} (${item.supCode})`,
+  })),
 )
 
 const addPendingBatchNo = (batchNo: string) => {
@@ -124,19 +175,56 @@ const addPendingBatchNo = (batchNo: string) => {
 
 const loadMaterials = async () => {
   try {
-    const res = await getMaterialList({ pageSize: 1000 })
-    materialList.value = res.data.records || []
+    const res = await getMaterialOptions()
+    materialList.value = res.data || []
   } catch (error) {
     console.error('加载物料列表失败:', error)
   }
 }
 
 const loadSuppliers = async () => {
+  if (!formData.itemId) {
+    supplierList.value = []
+    return
+  }
+
   try {
-    const res = await getSupplierList({ pageSize: 1000 })
-    supplierList.value = res.data.records || []
+    supplierLoading.value = true
+    const res = await getSuppliersByMaterial(formData.itemId)
+    supplierList.value = res.data || []
   } catch (error) {
-    console.error('加载供应商列表失败:', error)
+    console.error('按物料加载供应商失败:', error)
+  } finally {
+    supplierLoading.value = false
+  }
+}
+
+const loadCompatibleUnitOptions = async (materialId?: number) => {
+  const material = materialList.value.find((item) => item.mid === materialId)
+  const baseUnit = material?.unit || ''
+
+  compatibleUnitOptions.value = []
+
+  if (!baseUnit) {
+    formData.inputUnit = ''
+    return
+  }
+
+  try {
+    compatibleUnitsLoading.value = true
+    const res = await getCompatibleUnits(baseUnit)
+    const options = res.data || []
+    const hasBaseUnit = options.some((item) => item.unit === baseUnit)
+    compatibleUnitOptions.value = hasBaseUnit
+      ? options
+      : [{ unit: baseUnit, label: baseUnit }, ...options]
+    formData.inputUnit = baseUnit
+  } catch (error) {
+    console.error('加载兼容单位失败:', error)
+    compatibleUnitOptions.value = [{ unit: baseUnit, label: baseUnit }]
+    formData.inputUnit = baseUnit
+  } finally {
+    compatibleUnitsLoading.value = false
   }
 }
 
@@ -154,11 +242,12 @@ const handleSubmit = async () => {
     try {
       submitting.value = true
       const res = await registerMaterialLot({
-        itemId: formData.itemId,
+        itemId: formData.itemId!,
         itemType: 1,
         supId: formData.supId,
         totalQuantity: formData.totalQuantity,
-        unit: formData.unit || undefined,
+        arrivalQty: formData.totalQuantity,
+        inputUnit: formData.inputUnit || undefined,
         productionDate: formData.productionDate || undefined,
         expiryDate: formData.expiryDate || undefined,
       })
@@ -187,9 +276,17 @@ const goToPutAway = () => {
 
 onMounted(() => {
   loadMaterials()
-  loadSuppliers()
-  loadUnitDict()
 })
+
+watch(
+  () => formData.itemId,
+  () => {
+    formData.supId = undefined
+    formData.inputUnit = ''
+    loadSuppliers()
+    loadCompatibleUnitOptions(formData.itemId)
+  },
+)
 </script>
 
 <style scoped>
@@ -213,6 +310,20 @@ onMounted(() => {
 
 .form-select {
   width: 220px;
+}
+
+.quantity-inline {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.quantity-input {
+  width: 220px;
+}
+
+.quantity-unit-select {
+  width: 180px;
 }
 
 .result-alert {

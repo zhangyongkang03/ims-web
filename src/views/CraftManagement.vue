@@ -66,8 +66,10 @@
         v-model:page-size="pagination.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         :total="pagination.total"
+        :hide-on-single-page="false"
         layout="total, sizes, prev, pager, next, jumper"
-        @change="getList"
+        @current-change="handleCurrentPageChange"
+        @size-change="handlePageSizeChange"
         class="pagination"
       />
     </el-card>
@@ -80,6 +82,7 @@
         :rules="rules"
         label-width="100px"
         label-position="right"
+        scroll-to-error
       >
         <el-form-item label="工艺名称" prop="recipeName">
           <el-input v-model="formData.recipeName" placeholder="请输入工艺名称" />
@@ -115,7 +118,7 @@ import {
   type Craft,
   type CraftForm,
 } from '@/api/craft'
-import { getProductList, type Product } from '@/api/product'
+import { getProductOptions, type Product } from '@/api/product'
 import type { FormInstance } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
@@ -146,15 +149,15 @@ const searchForm = reactive<{
 })
 
 const formData = reactive<CraftForm>({
-  productId: 0,
+  productId: undefined,
   recipeName: '',
   isDefault: false,
   remark: '',
 })
 
 const rules = {
-  recipeName: [{ required: true, message: '工艺名称不能为空', trigger: 'blur' }],
-  productId: [{ required: true, message: '关联产品不能为空', trigger: 'change' }],
+  recipeName: [{ required: true, message: '工艺名称不能为空' }],
+  productId: [{ required: true, message: '关联产品不能为空' }],
 }
 
 const dialogTitle = ref('新增工艺方案')
@@ -169,8 +172,8 @@ const getList = async () => {
       productId: searchForm.productId,
       isDefault: searchForm.isDefault,
     })
-    tableData.value = res.data.records
-    pagination.total = res.data.total
+    tableData.value = res.data.records || []
+    pagination.total = Number(res.data.total || 0)
   } catch (error) {
     console.error('获取工艺方案列表失败:', error)
   } finally {
@@ -180,14 +183,25 @@ const getList = async () => {
 
 const loadProductList = async () => {
   try {
-    const res = await getProductList({ pageSize: 1000 })
-    productList.value = res.data.records
+    const res = await getProductOptions()
+    productList.value = res.data
   } catch (error) {
     console.error('加载产品列表失败:', error)
   }
 }
 
 const handleSearch = () => {
+  pagination.pageNum = 1
+  getList()
+}
+
+const handleCurrentPageChange = (pageNum: number) => {
+  pagination.pageNum = pageNum
+  getList()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
   pagination.pageNum = 1
   getList()
 }
@@ -208,7 +222,7 @@ const openDialog = (type: 'add' | 'edit') => {
   if (type === 'add') {
     formData.id = undefined
     formData.recipeName = ''
-    formData.productId = 0
+    formData.productId = undefined
     formData.isDefault = false
     formData.remark = ''
   }
@@ -314,7 +328,8 @@ onMounted(() => {
 
 .pagination {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .dialog-footer {

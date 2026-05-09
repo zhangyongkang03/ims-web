@@ -110,8 +110,10 @@
         v-model:page-size="pagination.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         :total="pagination.total"
+        :hide-on-single-page="false"
         layout="total, sizes, prev, pager, next, jumper"
-        @change="getList"
+        @current-change="handleCurrentPageChange"
+        @size-change="handlePageSizeChange"
         class="pagination"
       />
     </el-card>
@@ -124,6 +126,7 @@
         :rules="rules"
         label-width="100px"
         label-position="right"
+        scroll-to-error
       >
         <el-form-item label="产品" prop="pId">
           <el-select v-model="formData.pId" placeholder="选择产品" @change="onProductChange">
@@ -191,7 +194,7 @@ import {
   type WorkOrderForm,
   type WorkOrderReport,
 } from '@/api/order'
-import { getProductList, type Product } from '@/api/product'
+import { getProductOptions, type Product } from '@/api/product'
 import { getRecipeList, type Recipe } from '@/api/recipe'
 import { getUserList, type User } from '@/api/user'
 import type { FormInstance } from 'element-plus'
@@ -233,9 +236,9 @@ const reportData = reactive<WorkOrderReport>({
 })
 
 const rules = {
-  pId: [{ required: true, message: '产品不能为空', trigger: 'change' }],
-  recipeId: [{ required: true, message: '配方不能为空', trigger: 'change' }],
-  targetQty: [{ required: true, message: '计划产量不能为空', trigger: 'blur' }],
+  pId: [{ required: true, message: '产品不能为空' }],
+  recipeId: [{ required: true, message: '配方不能为空' }],
+  targetQty: [{ required: true, message: '计划产量不能为空' }],
 }
 
 const dialogTitle = ref('新增工单')
@@ -273,8 +276,8 @@ const getList = async () => {
       searchKey: searchForm.searchKey,
       status: searchForm.status,
     })
-    tableData.value = res.data.records
-    pagination.total = res.data.total
+    tableData.value = res.data.records || []
+    pagination.total = Number(res.data.total || 0)
   } catch (error) {
     console.error('获取工单列表失败:', error)
   } finally {
@@ -285,11 +288,11 @@ const getList = async () => {
 const loadAllData = async () => {
   try {
     const [prodRes, recRes, usrRes] = await Promise.all([
-      getProductList({ pageSize: 1000 }),
+      getProductOptions(),
       getRecipeList({ pageSize: 1000 }),
       getUserList({ pageSize: 1000 }),
     ])
-    productList.value = prodRes.data.records
+    productList.value = prodRes.data
     recipeList.value = recRes.data.records
     userList.value = usrRes.data.records
   } catch (error) {
@@ -302,6 +305,17 @@ const onProductChange = () => {
 }
 
 const handleSearch = () => {
+  pagination.pageNum = 1
+  getList()
+}
+
+const handleCurrentPageChange = (pageNum: number) => {
+  pagination.pageNum = pageNum
+  getList()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
   pagination.pageNum = 1
   getList()
 }
@@ -513,7 +527,8 @@ onMounted(() => {
 
 .pagination {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .dialog-footer {

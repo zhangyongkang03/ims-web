@@ -104,8 +104,10 @@
         v-model:page-size="pagination.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         :total="pagination.total"
+        :hide-on-single-page="false"
         layout="total, sizes, prev, pager, next, jumper"
-        @change="getList"
+        @current-change="handleCurrentPageChange"
+        @size-change="handlePageSizeChange"
         class="pagination"
       />
     </el-card>
@@ -116,8 +118,9 @@
         ref="formRef"
         :model="formData"
         :rules="rules"
-        label-width="110px"
+        label-width="100px"
         label-position="right"
+        scroll-to-error
       >
         <el-form-item label="产品" prop="pId">
           <el-select
@@ -147,7 +150,7 @@
         <el-form-item label="配方" prop="recipeId">
           <el-select v-model="formData.recipeId" placeholder="选择配方" filterable>
             <el-option
-              v-for="r in filteredRecipes"
+              v-for="r in recipeList"
               :key="r.recipeId"
               :label="r.recipeName"
               :value="r.recipeId"
@@ -184,7 +187,7 @@
 
 <script setup lang="ts">
 import { getCustomerList, type Customer } from '@/api/customer'
-import { getProductList, type Product } from '@/api/product'
+import { getProductOptions, type Product } from '@/api/product'
 import { getRecipeList, type Recipe } from '@/api/recipe'
 import {
   addWorkOrder,
@@ -197,7 +200,7 @@ import {
 } from '@/api/workOrder'
 import type { FormInstance } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -220,21 +223,19 @@ const searchForm = reactive<{ searchKey: string; pId?: number; status?: number }
 })
 
 const formData = reactive<WorkOrderForm>({
-  pId: 0,
+  pId: undefined,
   customerId: undefined,
-  recipeId: 0,
+  recipeId: undefined,
   targetQty: 1000,
   plannedStart: undefined,
   plannedEnd: undefined,
 })
 
 const rules = {
-  pId: [{ required: true, message: '请选择产品', trigger: 'change' }],
-  recipeId: [{ required: true, message: '请选择配方', trigger: 'change' }],
-  targetQty: [{ required: true, message: '请输入计划产量', trigger: 'blur' }],
+  pId: [{ required: true, message: '请选择产品' }],
+  recipeId: [{ required: true, message: '请选择配方' }],
+  targetQty: [{ required: true, message: '请输入计划产量' }],
 }
-
-const filteredRecipes = computed(() => recipeList.value.filter((r) => r.pid === formData.pId))
 
 const statusTagType = (status: number): 'info' | 'warning' | 'success' | 'danger' => {
   const map: Record<number, 'info' | 'warning' | 'success' | 'danger'> = {
@@ -257,8 +258,8 @@ const getList = async () => {
       pId: searchForm.pId,
       status: searchForm.status,
     })
-    tableData.value = res.data.records
-    pagination.total = res.data.total
+    tableData.value = res.data.records || []
+    pagination.total = Number(res.data.total || 0)
   } finally {
     loading.value = false
   }
@@ -268,6 +269,18 @@ const handleSearch = () => {
   pagination.pageNum = 1
   getList()
 }
+
+const handleCurrentPageChange = (pageNum: number) => {
+  pagination.pageNum = pageNum
+  getList()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
+  pagination.pageNum = 1
+  getList()
+}
+
 const handleReset = () => {
   searchForm.searchKey = ''
   searchForm.pId = undefined
@@ -276,9 +289,24 @@ const handleReset = () => {
   getList()
 }
 
+const loadRecipeOptions = async (productId?: number) => {
+  if (!productId) {
+    recipeList.value = []
+    return
+  }
+
+  const res = await getRecipeList({
+    pageSize: 1000,
+    pId: productId,
+    isActive: 1,
+  })
+  recipeList.value = res.data.records || []
+}
+
 // ---- 新增/编辑 ----
-const onProductChange = () => {
-  formData.recipeId = 0
+const onProductChange = async () => {
+  formData.recipeId = undefined
+  await loadRecipeOptions(formData.pId)
 }
 
 const openDialog = (type: 'add' | 'edit') => {
@@ -286,19 +314,21 @@ const openDialog = (type: 'add' | 'edit') => {
   dialogTitle.value = type === 'add' ? '新增工单' : '编辑工单'
   if (type === 'add') {
     formData.woId = undefined
-    formData.pId = 0
+    formData.pId = undefined
     formData.customerId = undefined
-    formData.recipeId = 0
+    formData.recipeId = undefined
     formData.targetQty = 1000
     formData.plannedStart = undefined
     formData.plannedEnd = undefined
+    recipeList.value = []
   }
   dialogVisible.value = true
 }
 
-const handleEdit = (row: WorkOrder) => {
+const handleEdit = async (row: WorkOrder) => {
   dialogType.value = 'edit'
   dialogTitle.value = '编辑工单'
+  await loadRecipeOptions(row.pId)
   formData.woId = row.woId
   formData.pId = row.pId
   formData.customerId = row.customerId
@@ -366,13 +396,11 @@ const goDetail = (row: WorkOrder) => {
 
 // ---- 初始化 ----
 const loadAllData = async () => {
-  const [prodRes, recRes, custRes] = await Promise.all([
-    getProductList({ pageSize: 1000 }),
-    getRecipeList({ pageSize: 1000 }),
-    getCustomerList({ pageSize: 1000 }),
+  const [prodRes, custRes] = await Promise.all([
+    getProductOptions(),
+    getCustomerList({ pageSize: 1000, searchStatus: 1 }),
   ])
-  productList.value = prodRes.data.records
-  recipeList.value = recRes.data.records
+  productList.value = prodRes.data
   customerList.value = custRes.data.records
 }
 
@@ -408,6 +436,7 @@ onMounted(() => {
 }
 .pagination {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

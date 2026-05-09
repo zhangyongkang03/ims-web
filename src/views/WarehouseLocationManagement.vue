@@ -83,15 +83,19 @@
         </el-table-column>
       </el-table>
 
-      <el-pagination
-        v-model:current-page="locationPagination.pageNum"
-        v-model:page-size="locationPagination.pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="locationPagination.total"
-        layout="total, sizes, prev, pager, next, jumper"
-        class="pagination"
-        @change="getLocationListData"
-      />
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="locationPagination.pageNum"
+          v-model:page-size="locationPagination.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="locationPagination.total"
+          :hide-on-single-page="false"
+          layout="total, sizes, prev, pager, next, jumper"
+          class="pagination"
+          @current-change="getLocationListData"
+          @size-change="getLocationListData"
+        />
+      </div>
     </el-card>
 
     <el-dialog v-model="locationDialogVisible" :title="locationDialogTitle" width="520px">
@@ -100,6 +104,7 @@
         :model="locationFormData"
         :rules="locationRules"
         label-width="95px"
+        scroll-to-error
       >
         <el-form-item label="所属仓库">
           <el-input :value="warehouseTitle" disabled />
@@ -195,7 +200,7 @@ const locationFormData = reactive<LocationForm>({
 })
 
 const locationRules = {
-  locCode: [{ required: true, message: '库位编码不能为空', trigger: 'blur' }],
+  locCode: [{ required: true, message: '库位编码不能为空' }],
 }
 
 const getLocationTypeLabel = (value?: number) => {
@@ -394,8 +399,9 @@ onMounted(async () => {
   width: 160px;
 }
 
-.pagination {
+.pagination-container {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

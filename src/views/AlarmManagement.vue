@@ -43,8 +43,7 @@
       </div>
 
       <el-table :data="tableData" stripe style="width: 100%" v-loading="loading">
-        <el-table-column prop="alarmId" label="报警ID" width="90" />
-        <el-table-column prop="batchNo" label="批次号" width="140" />
+        <el-table-column prop="batchNo" label="批次号" width="220" />
         <el-table-column prop="deviceCode" label="设备编码" width="120" />
         <el-table-column label="计入不良品" width="130">
           <template #default="scope">
@@ -87,24 +86,25 @@
         </el-table-column>
       </el-table>
 
-      <el-pagination
-        v-model:current-page="pagination.pageNum"
-        v-model:page-size="pagination.pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="pagination.total"
-        layout="total, sizes, prev, pager, next, jumper"
-        @change="getList"
-        class="pagination"
-      />
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="pagination.pageNum"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="pagination.total"
+          :hide-on-single-page="false"
+          layout="total, sizes, prev, pager, next, jumper"
+          class="pagination"
+          @current-change="handlePageChange"
+          @size-change="handlePageSizeChange"
+        />
+      </div>
     </el-card>
 
     <el-dialog v-model="dialogVisible" title="处理报警" width="420px">
-      <el-form ref="formRef" :model="handleForm" :rules="rules" label-width="90px">
+      <el-form ref="formRef" :model="handleForm" :rules="rules" label-width="90px" scroll-to-error>
         <el-form-item label="报警ID">
           <span>{{ handleForm.alarmId || '-' }}</span>
-        </el-form-item>
-        <el-form-item label="处理人" prop="handleUser">
-          <el-input v-model="handleForm.handleUser" placeholder="请输入处理人" />
         </el-form-item>
         <el-form-item label="处理备注" prop="handleRemark">
           <el-input
@@ -162,8 +162,7 @@ const handleForm = reactive({
 })
 
 const rules = {
-  handleUser: [{ required: true, message: '请输入处理人', trigger: 'blur' }],
-  handleRemark: [{ required: true, message: '请输入处理备注', trigger: 'blur' }],
+  handleRemark: [{ required: true, message: '请输入处理备注' }],
 }
 
 const levelTagType = (level: string) => {
@@ -179,13 +178,12 @@ const isBadQtyCounted = (deviceCode: string) => {
 
 const loadDeviceCategories = async () => {
   const res = await getDeviceList({ pageNum: 1, pageSize: 1000 })
-  sensorCategoryMap.value = res.data.records.reduce<Record<string, 'PROCESS' | 'PER_BOTTLE' | null>>(
-    (acc, item) => {
-      acc[item.deviceCode] = item.sensorCategory || null
-      return acc
-    },
-    {},
-  )
+  sensorCategoryMap.value = res.data.records.reduce<
+    Record<string, 'PROCESS' | 'PER_BOTTLE' | null>
+  >((acc, item) => {
+    acc[item.deviceCode] = item.sensorCategory || null
+    return acc
+  }, {})
 }
 
 const getList = async () => {
@@ -223,6 +221,17 @@ const handleReset = () => {
   getList()
 }
 
+const handlePageChange = (pageNum: number) => {
+  pagination.pageNum = pageNum
+  getList()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
+  pagination.pageNum = 1
+  getList()
+}
+
 const openHandleDialog = (row: AlarmRecord) => {
   if (!row.alarmId) {
     ElMessage.warning('该告警尚未生成可处理ID，请稍后刷新后再试')
@@ -256,11 +265,11 @@ const submitHandle = async () => {
 
   submitLoading.value = true
   try {
-    await handleAlarm({
+    const payload = {
       alarmId: handleForm.alarmId,
-      handleUser: handleForm.handleUser,
       handleRemark: handleForm.handleRemark,
-    })
+    }
+    await handleAlarm(payload)
     ElMessage.success('处理成功')
     dialogVisible.value = false
     await Promise.all([getList(), refreshCount()])
@@ -318,8 +327,13 @@ onBeforeUnmount(() => {
   width: 200px;
 }
 
-.pagination {
+.pagination-container {
   margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pagination {
   justify-content: flex-end;
 }
 </style>

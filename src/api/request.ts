@@ -15,11 +15,30 @@ const service: AxiosInstance = axios.create({
   timeout: 15000,
 })
 
+const messageThrottleMap = new Map<string, number>()
+const showMessageWithThrottle = (key: string, message: string, duration = 1500) => {
+  const now = Date.now()
+  const last = messageThrottleMap.get(key) || 0
+  if (now - last < duration) {
+    return
+  }
+  messageThrottleMap.set(key, now)
+  ElMessage.error(message)
+}
+
+const getValidToken = () => {
+  const token = localStorage.getItem('token')?.trim()
+  if (!token || token === 'null' || token === 'undefined') {
+    return ''
+  }
+  return token
+}
+
 // 请求拦截器
 service.interceptors.request.use(
   (config) => {
     // 从localStorage获取token
-    const token = localStorage.getItem('token')
+    const token = getValidToken()
     if (token) {
       config.headers.Authorization = token.startsWith('Bearer ') ? token : `Bearer ${token}`
     }
@@ -47,11 +66,30 @@ service.interceptors.response.use(
   (error) => {
     console.error('响应错误:', error)
 
-    // 401未授权，跳转登录
-    if (error.response?.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
+    const status = error.response?.status
+    const hasToken = Boolean(getValidToken())
+
+    // 401 表示未登录或令牌失效，统一回登录页
+    if (status === 401) {
+      showMessageWithThrottle('401-expired', '登录已过期，请重新登录')
       localStorage.removeItem('token')
-      window.location.href = '/login'
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
+      return Promise.reject(error)
+    }
+
+    // 403：无token时按未登录处理；有token时按无权限处理，不强制登出
+    if (status === 403) {
+      if (!hasToken) {
+        showMessageWithThrottle('403-login', '请先登录')
+        localStorage.removeItem('token')
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login'
+        }
+      } else {
+        showMessageWithThrottle('403-no-permission', '无权限访问该资源')
+      }
       return Promise.reject(error)
     }
 

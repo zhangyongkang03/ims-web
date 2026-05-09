@@ -47,8 +47,11 @@
           :formatter="(row) => (row.status === 1 ? '启用' : '禁用')"
         />
         <el-table-column prop="createTime" label="创建时间" width="180" />
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="scope">
+            <el-button link type="primary" size="small" @click="openMaterialDialog(scope.row)">
+              配置物料
+            </el-button>
             <el-button link type="primary" size="small" @click="handleEdit(scope.row)"
               >编辑</el-button
             >
@@ -65,8 +68,10 @@
         v-model:page-size="pagination.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         :total="pagination.total"
+        :hide-on-single-page="false"
         layout="total, sizes, prev, pager, next, jumper"
-        @change="getList"
+        @current-change="handleCurrentPageChange"
+        @size-change="handlePageSizeChange"
         class="pagination"
       />
     </el-card>
@@ -79,15 +84,20 @@
         :rules="rules"
         label-width="100px"
         label-position="right"
+        scroll-to-error
       >
         <el-form-item v-if="dialogType === 'edit'" label="供应商编码">
           <el-input v-model="formData.supCode" disabled />
         </el-form-item>
         <el-form-item label="供应商名称" prop="supName">
-          <el-input v-model="formData.supName" />
+          <el-input v-model="formData.supName" @blur="validateFieldIfNeeded('supName')" />
         </el-form-item>
         <el-form-item label="供应商类型" prop="supType">
-          <el-select v-model="formData.supType" placeholder="请选择供应商类型">
+          <el-select
+            v-model="formData.supType"
+            placeholder="请选择供应商类型"
+            @change="validateFieldIfNeeded('supType')"
+          >
             <el-option
               v-for="item in supplierTypeOptions"
               :key="item.dictValue"
@@ -103,7 +113,7 @@
           <el-input v-model="formData.contactPhone" />
         </el-form-item>
         <el-form-item label="状态" prop="status">
-          <el-select v-model="formData.status">
+          <el-select v-model="formData.status" @change="validateFieldIfNeeded('status')">
             <el-option label="启用" :value="1" />
             <el-option label="禁用" :value="0" />
           </el-select>
@@ -116,29 +126,77 @@
         </span>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="materialDialogVisible" :title="materialDialogTitle" width="40%">
+      <el-form label-width="100px" label-position="right">
+        <el-form-item label="可供应物料">
+          <el-select
+            v-model="selectedMaterialIds"
+            multiple
+            filterable
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="请选择可供应物料"
+            style="width: 100%"
+            :loading="materialLoading"
+          >
+            <el-option
+              v-for="item in materialOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="materialDialogVisible = false">取消</el-button>
+          <el-button
+            type="primary"
+            :loading="materialSubmitting"
+            @click="handleSaveSupplierMaterials"
+          >
+            保存
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
+import { getMaterialOptions } from '@/api/material'
 import {
   addSupplier,
   deleteSupplier,
   getSupplierList,
+  getSupplierMaterials,
+  setSupplierMaterials,
   updateSupplier,
   type Supplier,
   type SupplierForm,
 } from '@/api/supplier'
+import { useDeferredFormValidation } from '@/composables/useDeferredFormValidation'
 import { useDictData } from '@/composables/useDictData'
 import { DICT_TYPE } from '@/constants/dict'
 import type { FormInstance } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 
 const loading = ref(false)
 const dialogVisible = ref(false)
+const materialDialogVisible = ref(false)
 const dialogType = ref<'add' | 'edit'>('add')
 const formRef = ref<FormInstance>()
+const { enableInteractionValidation, resetInteractionValidation, validateFieldIfNeeded } =
+  useDeferredFormValidation(formRef)
 const tableData = ref<Supplier[]>([])
+const materialLoading = ref(false)
+const materialSubmitting = ref(false)
+const selectedMaterialIds = ref<number[]>([])
+const allMaterials = ref<Array<{ mid: number; mname: string; mcode: string }>>([])
+const currentSupplier = ref<Supplier | null>(null)
 
 const {
   options: supplierTypeOptions,
@@ -154,7 +212,7 @@ const pagination = reactive({
 
 const searchForm = reactive({
   searchKey: '',
-  searchStatus: undefined,
+  searchStatus: 1,
 })
 
 const formData = reactive<SupplierForm>({
@@ -167,12 +225,63 @@ const formData = reactive<SupplierForm>({
 })
 
 const rules = {
-  supName: [{ required: true, message: '供应商名称不能为空', trigger: 'blur' }],
-  supType: [{ required: true, message: '供应商类型不能为空', trigger: 'change' }],
-  status: [{ required: true, message: '状态不能为空', trigger: 'blur' }],
+  supName: [{ required: true, message: '供应商名称不能为空' }],
+  supType: [{ required: true, message: '供应商类型不能为空' }],
+  status: [{ required: true, message: '状态不能为空' }],
 }
 
 const dialogTitle = ref('新增供应商')
+const materialDialogTitle = computed(() =>
+  currentSupplier.value ? `配置供应物料 - ${currentSupplier.value.supName}` : '配置供应物料',
+)
+
+const materialOptions = computed(() =>
+  allMaterials.value.map((item) => ({
+    value: item.mid,
+    label: `${item.mname} (${item.mcode})`,
+  })),
+)
+
+const loadAllMaterials = async () => {
+  if (allMaterials.value.length > 0) return
+
+  const res = await getMaterialOptions()
+  allMaterials.value = (res.data || []).map((item) => ({
+    mid: item.mid,
+    mname: item.mname,
+    mcode: item.mcode,
+  }))
+}
+
+const openMaterialDialog = async (row: Supplier) => {
+  try {
+    materialLoading.value = true
+    currentSupplier.value = row
+    materialDialogVisible.value = true
+    await loadAllMaterials()
+    const res = await getSupplierMaterials(row.supId)
+    selectedMaterialIds.value = (res.data || []).map((item) => Number(item.mId)).filter(Boolean)
+  } catch (error) {
+    console.error('加载供应商可供物料失败:', error)
+  } finally {
+    materialLoading.value = false
+  }
+}
+
+const handleSaveSupplierMaterials = async () => {
+  if (!currentSupplier.value) return
+
+  try {
+    materialSubmitting.value = true
+    await setSupplierMaterials(currentSupplier.value.supId, selectedMaterialIds.value)
+    ElMessage.success('保存成功')
+    materialDialogVisible.value = false
+  } catch (error) {
+    console.error('保存供应商物料失败:', error)
+  } finally {
+    materialSubmitting.value = false
+  }
+}
 
 const getList = async () => {
   loading.value = true
@@ -183,8 +292,8 @@ const getList = async () => {
       searchKey: searchForm.searchKey,
       searchStatus: searchForm.searchStatus,
     })
-    tableData.value = res.data.records
-    pagination.total = res.data.total
+    tableData.value = res.data.records || []
+    pagination.total = Number(res.data.total || 0)
   } catch (error) {
     console.error('获取供应商列表失败:', error)
   } finally {
@@ -197,14 +306,26 @@ const handleSearch = () => {
   getList()
 }
 
+const handleCurrentPageChange = (pageNum: number) => {
+  pagination.pageNum = pageNum
+  getList()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
+  pagination.pageNum = 1
+  getList()
+}
+
 const handleReset = () => {
   searchForm.searchKey = ''
-  searchForm.searchStatus = undefined
+  searchForm.searchStatus = 1
   pagination.pageNum = 1
   getList()
 }
 
 const openDialog = (type: 'add' | 'edit') => {
+  resetInteractionValidation()
   dialogType.value = type
   dialogTitle.value = type === 'add' ? '新增供应商' : '编辑供应商'
   dialogVisible.value = true
@@ -219,6 +340,7 @@ const openDialog = (type: 'add' | 'edit') => {
 }
 
 const handleEdit = (row: Supplier) => {
+  resetInteractionValidation()
   dialogType.value = 'edit'
   dialogTitle.value = '编辑供应商'
   dialogVisible.value = true
@@ -236,7 +358,10 @@ const handleSubmit = async () => {
   if (!formRef.value) return
 
   await formRef.value.validate(async (valid) => {
-    if (!valid) return
+    if (!valid) {
+      enableInteractionValidation()
+      return
+    }
 
     try {
       if (dialogType.value === 'add') {
@@ -311,7 +436,8 @@ loadSupplierTypeDict()
 
 .pagination {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .dialog-footer {

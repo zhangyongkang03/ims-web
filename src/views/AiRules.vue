@@ -50,7 +50,7 @@
 
     <!-- 新增/编辑弹窗 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="560px">
-      <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px">
+      <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px" scroll-to-error>
         <el-form-item label="规则名称" prop="ruleName">
           <el-input v-model="formData.ruleName" placeholder="如：灌装标准差超限" />
         </el-form-item>
@@ -151,12 +151,12 @@ const formData = reactive<AiRuleForm>({
 })
 
 const rules = {
-  ruleName: [{ required: true, message: '规则名称不能为空', trigger: 'blur' }],
-  metricName: [{ required: true, message: '监控指标不能为空', trigger: 'change' }],
-  operator: [{ required: true, message: '操作符不能为空', trigger: 'change' }],
-  thresholdValue: [{ required: true, message: '阈值不能为空', trigger: 'blur' }],
-  severity: [{ required: true, message: '严重程度不能为空', trigger: 'change' }],
-  action: [{ required: true, message: '触发动作不能为空', trigger: 'blur' }],
+  ruleName: [{ required: true, message: '规则名称不能为空' }],
+  metricName: [{ required: true, message: '监控指标不能为空' }],
+  operator: [{ required: true, message: '操作符不能为空' }],
+  thresholdValue: [{ required: true, message: '阈值不能为空' }],
+  severity: [{ required: true, message: '严重程度不能为空' }],
+  action: [{ required: true, message: '触发动作不能为空' }],
 }
 
 const severityTag = (val: string) => {

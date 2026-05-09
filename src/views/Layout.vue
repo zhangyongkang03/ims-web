@@ -13,143 +13,25 @@
           text-color="#bfcbd9"
           active-text-color="#409EFF"
         >
-          <el-menu-item index="/dashboard">
-            <el-icon><Monitor /></el-icon>
-            <span>控制台</span>
-          </el-menu-item>
-          <el-sub-menu index="order">
-            <template #title>
-              <el-icon><ShoppingCart /></el-icon>
-              <span>工单管理</span>
-            </template>
-            <el-menu-item index="/order/order">
-              <span>工单列表</span>
-            </el-menu-item>
-            <el-menu-item index="/base/recipe">
-              <span>配方管理</span>
-            </el-menu-item>
-            <el-menu-item index="/craft/craft">
-              <span>工艺方案</span>
-            </el-menu-item>
-          </el-sub-menu>
-          <el-sub-menu index="material">
-            <template #title>
-              <el-icon><Goods /></el-icon>
-              <span>物料管理</span>
-            </template>
-            <el-menu-item index="/material/material">
-              <span>物料信息</span>
-            </el-menu-item>
-            <el-menu-item index="/material/supplier">
-              <span>供应商</span>
-            </el-menu-item>
-            <el-menu-item index="/material/customer">
-              <span>客户</span>
-            </el-menu-item>
-            <el-menu-item index="/material/product">
-              <span>产品管理</span>
-            </el-menu-item>
-          </el-sub-menu>
-          <el-sub-menu index="stock">
-            <template #title>
-              <el-icon><Box /></el-icon>
-              <span>库存管理</span>
-            </template>
-            <el-menu-item index="/material/stock">
-              <span>材料库存与入库</span>
-            </el-menu-item>
-            <el-menu-item index="/stock/product">
-              <span>产成品库存</span>
-            </el-menu-item>
-          </el-sub-menu>
-          <el-sub-menu index="base">
-            <template #title>
-              <el-icon><DocumentCopy /></el-icon>
-              <span>基础管理</span>
-            </template>
-            <el-menu-item index="/base/schedule">
-              <span>排班与交接班</span>
-            </el-menu-item>
-            <el-menu-item index="/base/alarm">
-              <span>异常报警</span>
-            </el-menu-item>
-            <el-menu-item index="/base/wms">
-              <span>仓库与库位管理</span>
-            </el-menu-item>
-          </el-sub-menu>
-          <el-sub-menu index="ai">
-            <template #title>
-              <el-icon><DataAnalysis /></el-icon>
-              <span>AI辅助决策</span>
-            </template>
-            <el-menu-item index="/ai/chat">
-              <span>AI智能问答</span>
-            </el-menu-item>
-            <el-menu-item index="/ai/dashboard">
-              <span>实时监控大屏</span>
-            </el-menu-item>
-            <el-menu-item index="/ai/decisions">
-              <span>决策日志</span>
-            </el-menu-item>
-            <el-menu-item index="/ai/knowledge">
-              <span>知识库管理</span>
-            </el-menu-item>
-            <el-menu-item index="/ai/rules">
-              <span>规则配置</span>
-            </el-menu-item>
-            <el-menu-item index="/ai/settings">
-              <span>模型配置</span>
-            </el-menu-item>
-            <el-menu-item index="/ai/batch-quality">
-              <span>批次质量报告</span>
-            </el-menu-item>
-            <el-menu-item index="/ai/traceability">
-              <span>全流程溯源</span>
-            </el-menu-item>
-            <el-menu-item index="/ai/device-report">
-              <span>设备运行日报</span>
-            </el-menu-item>
-          </el-sub-menu>
-          <el-sub-menu index="equipment">
-            <template #title>
+          <template v-for="menu in sidebarMenus" :key="String(menu.id)">
+            <el-sub-menu v-if="isGroupMenu(menu)" :index="menu.path">
+              <template #title>
+                <el-icon><Menu /></el-icon>
+                <span>{{ menu.menuName }}</span>
+              </template>
+              <el-menu-item
+                v-for="child in getVisibleChildren(menu)"
+                :key="String(child.id)"
+                :index="toFrontendPath(child.path)"
+              >
+                <span>{{ child.menuName }}</span>
+              </el-menu-item>
+            </el-sub-menu>
+            <el-menu-item v-else :index="resolveMenuPath(menu)">
               <el-icon><Monitor /></el-icon>
-              <span>设备管理</span>
-            </template>
-            <el-menu-item index="/equipment/equipment">
-              <span>生产设备</span>
+              <span>{{ menu.menuName }}</span>
             </el-menu-item>
-            <el-menu-item index="/equipment/station">
-              <span>工位管理</span>
-            </el-menu-item>
-            <el-menu-item index="/equipment/device">
-              <span>传感器管理</span>
-            </el-menu-item>
-            <el-menu-item index="/equipment/repair-order">
-              <span>维修工单</span>
-            </el-menu-item>
-          </el-sub-menu>
-          <el-sub-menu index="system">
-            <template #title>
-              <el-icon><Setting /></el-icon>
-              <span>系统管理</span>
-            </template>
-            <el-menu-item index="/system/user">
-              <el-icon><User /></el-icon>
-              <span>用户管理</span>
-            </el-menu-item>
-            <el-menu-item index="/system/role">
-              <el-icon><UserFilled /></el-icon>
-              <span>角色管理</span>
-            </el-menu-item>
-            <el-menu-item index="/system/menu">
-              <el-icon><Menu /></el-icon>
-              <span>菜单管理</span>
-            </el-menu-item>
-            <el-menu-item index="/system/dict-type">
-              <el-icon><Collection /></el-icon>
-              <span>字典管理</span>
-            </el-menu-item>
-          </el-sub-menu>
+          </template>
         </el-menu>
       </el-aside>
 
@@ -168,7 +50,7 @@
               <el-dropdown @command="handleCommand">
                 <span class="user-name">
                   <el-icon><Avatar /></el-icon>
-                  管理员
+                  {{ userStore.userInfo?.username || '管理员' }}
                   <el-icon class="el-icon--right"><ArrowDown /></el-icon>
                 </span>
                 <template #dropdown>
@@ -191,22 +73,10 @@
 </template>
 
 <script setup lang="ts">
+import type { AuthMenu } from '@/api/auth'
+import { normalizeMenuPath } from '@/constants/menuPathMap'
 import { useUserStore } from '@/stores/user'
-import {
-  ArrowDown,
-  Avatar,
-  Box,
-  Collection,
-  DataAnalysis,
-  DocumentCopy,
-  Goods,
-  Menu,
-  Monitor,
-  Setting,
-  ShoppingCart,
-  User,
-  UserFilled,
-} from '@element-plus/icons-vue'
+import { ArrowDown, Avatar, Menu, Monitor } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -214,6 +84,74 @@ import { useRoute, useRouter } from 'vue-router'
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+
+const toFrontendPath = (path: string) => normalizeMenuPath(path)
+
+const hasMenuPermission = (menu: AuthMenu) => {
+  if (!menu.perms) {
+    return true
+  }
+  return userStore.hasPermission(menu.perms)
+}
+
+const reorderEquipmentChildren = (menu: AuthMenu, children: AuthMenu[]) => {
+  if (menu.path !== '/equipment' || children.length < 2) {
+    return children
+  }
+
+  const orderWeight: Record<string, number> = {
+    '/equipment/station': 0,
+    '/equipment/equipment': 1,
+  }
+
+  return [...children].sort((left, right) => {
+    const leftWeight = orderWeight[left.path] ?? Number.MAX_SAFE_INTEGER
+    const rightWeight = orderWeight[right.path] ?? Number.MAX_SAFE_INTEGER
+    return leftWeight - rightWeight
+  })
+}
+
+const filterMenus = (menus: AuthMenu[]): AuthMenu[] => {
+  return menus
+    .filter((menu) => menu && menu.path)
+    .map((menu) => {
+      const children = Array.isArray(menu.children)
+        ? reorderEquipmentChildren(menu, filterMenus(menu.children))
+        : []
+      return {
+        ...menu,
+        children,
+      }
+    })
+    .filter((menu) => {
+      if (!hasMenuPermission(menu)) return false
+      if (menu.menuType === 'M') {
+        return Array.isArray(menu.children) && menu.children.length > 0
+      }
+      return menu.menuType === 'C'
+    })
+}
+
+const sidebarMenus = computed(() => {
+  if (!userStore.authInfoLoaded) {
+    return []
+  }
+  return filterMenus(userStore.menus)
+})
+
+const getVisibleChildren = (menu: AuthMenu) => (Array.isArray(menu.children) ? menu.children : [])
+
+const isGroupMenu = (menu: AuthMenu) => menu.menuType === 'M' && getVisibleChildren(menu).length > 1
+
+const resolveMenuPath = (menu: AuthMenu) => {
+  if (menu.menuType === 'M') {
+    const children = getVisibleChildren(menu)
+    if (children.length === 1) {
+      return toFrontendPath(children[0]?.path || menu.path)
+    }
+  }
+  return toFrontendPath(menu.path)
+}
 
 const activeMenu = computed(() => {
   if (route.path.startsWith('/base/wms/')) {
@@ -263,7 +201,6 @@ const currentRoute = computed(() => {
     '/ai/decisions': '决策日志',
     '/ai/knowledge': '知识库管理',
     '/ai/rules': '规则配置',
-    '/ai/settings': '模型配置',
     '/ai/batch-quality': '批次质量报告',
     '/ai/traceability': '全流程溯源',
     '/ai/device-report': '设备运行日报',

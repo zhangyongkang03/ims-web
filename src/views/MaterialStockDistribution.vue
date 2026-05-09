@@ -61,6 +61,18 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <el-pagination
+        v-if="detailVisible"
+        v-model:current-page="detailPagination.pageNum"
+        v-model:page-size="detailPagination.pageSize"
+        :page-sizes="[10, 20, 50, 100]"
+        :total="detailPagination.total"
+        :hide-on-single-page="false"
+        layout="total, sizes, prev, pager, next, jumper"
+        class="pagination"
+        @change="loadDetailList"
+      />
     </el-card>
 
     <el-dialog v-model="transferDialogVisible" title="库存移库" width="520px">
@@ -69,6 +81,7 @@
         :model="transferForm"
         :rules="transferRules"
         label-width="110px"
+        scroll-to-error
       >
         <el-form-item label="源仓库">
           <el-input :value="transferSourceWhText" disabled />
@@ -109,9 +122,9 @@
       </el-form>
       <template #footer>
         <el-button @click="transferDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="transferSubmitting" @click="handleTransferSubmit"
-          >确定</el-button
-        >
+        <el-button type="primary" :loading="transferSubmitting" @click="handleTransferSubmit">
+          确定
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -130,7 +143,7 @@ import {
 import { getWarehouseAll, type Warehouse } from '@/api/warehouse'
 import type { FormInstance } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
@@ -146,6 +159,7 @@ const detailLoading = ref(false)
 const detailData = ref<MaterialLot[]>([])
 const detailTitle = ref('库位明细')
 const currentDetailWhId = ref('')
+const detailPagination = reactive({ pageNum: 1, pageSize: 10, total: 0 })
 const transferDialogVisible = ref(false)
 const transferSubmitting = ref(false)
 const transferFormRef = ref<FormInstance>()
@@ -160,9 +174,9 @@ const transferForm = ref<MaterialLotTransferForm>({
 })
 
 const transferRules = {
-  targetWhId: [{ required: true, message: '目标仓库不能为空', trigger: 'change' }],
-  targetLocId: [{ required: true, message: '目标库位不能为空', trigger: 'change' }],
-  transferQty: [{ required: true, message: '移库数量不能为空', trigger: 'blur' }],
+  targetWhId: [{ required: true, message: '目标仓库不能为空' }],
+  targetLocId: [{ required: true, message: '目标库位不能为空' }],
+  transferQty: [{ required: true, message: '移库数量不能为空' }],
 }
 
 const pageTitle = computed(() => {
@@ -205,27 +219,36 @@ const loadSummary = async () => {
   }
 }
 
-const handleViewWarehouseDetail = async (row: MaterialStockSummary) => {
-  currentDetailWhId.value = row.whId
-  detailVisible.value = true
+const loadDetailList = async () => {
+  if (!currentDetailWhId.value) return
+
   detailLoading.value = true
-  detailTitle.value = `${itemName || row.itemName || ''} - ${row.whName || row.whId} 库位明细`
   try {
     const res = await getMaterialLotList({
-      pageNum: 1,
-      pageSize: 1000,
+      pageNum: detailPagination.pageNum,
+      pageSize: detailPagination.pageSize,
       itemId: rawItemId,
       itemType: 1,
-      whId: row.whId,
+      whId: currentDetailWhId.value,
     })
-    detailData.value = res.data.records
+    detailData.value = res.data.records || []
+    detailPagination.total = res.data.total || 0
   } catch (error) {
     detailData.value = []
+    detailPagination.total = 0
     ElMessage.error('加载库位明细失败')
     console.error('加载库位明细失败:', error)
   } finally {
     detailLoading.value = false
   }
+}
+
+const handleViewWarehouseDetail = async (row: MaterialStockSummary) => {
+  currentDetailWhId.value = row.whId
+  detailVisible.value = true
+  detailTitle.value = `${itemName || row.itemName || ''} - ${row.whName || row.whId} 库位明细`
+  detailPagination.pageNum = 1
+  await loadDetailList()
 }
 
 const loadTransferWarehouseList = async () => {
@@ -298,6 +321,7 @@ const handleTransferSubmit = async () => {
           await handleViewWarehouseDetail(currentWh)
         } else {
           detailData.value = []
+          detailPagination.total = 0
           detailVisible.value = false
         }
       }
@@ -333,5 +357,10 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.pagination {
+  margin-top: 16px;
+  justify-content: flex-end;
 }
 </style>

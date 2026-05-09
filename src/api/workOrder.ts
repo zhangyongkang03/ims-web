@@ -61,9 +61,9 @@ export interface WorkOrderDetail extends WorkOrder {
 /** 新增/修改工单表单 */
 export interface WorkOrderForm {
   woId?: string
-  pId: number
+  pId?: number
   customerId?: number
-  recipeId: number
+  recipeId?: number
   targetQty: number
   plannedStart?: string
   plannedEnd?: string

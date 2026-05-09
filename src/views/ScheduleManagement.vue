@@ -10,7 +10,12 @@
       <el-tabs v-model="activeTab">
         <el-tab-pane label="班组管理" name="team">
           <div class="search-form">
-            <el-input v-model="teamSearch.searchKey" placeholder="班组名称" clearable class="search-input" />
+            <el-input
+              v-model="teamSearch.searchKey"
+              placeholder="班组名称"
+              clearable
+              class="search-input"
+            />
             <el-button type="primary" @click="handleTeamSearch">搜索</el-button>
             <el-button @click="handleTeamReset">重置</el-button>
             <el-button type="primary" @click="openTeamDialog('add')">新增班组</el-button>
@@ -23,9 +28,15 @@
             <el-table-column prop="remark" label="备注" min-width="220" />
             <el-table-column label="操作" width="230" fixed="right">
               <template #default="{ row }">
-                <el-button link type="success" size="small" @click="openTeamMemberDialog(row)">组员</el-button>
-                <el-button link type="primary" size="small" @click="openTeamDialog('edit', row)">编辑</el-button>
-                <el-button link type="danger" size="small" @click="handleDeleteTeam(row)">删除</el-button>
+                <el-button link type="success" size="small" @click="openTeamMemberDialog(row)"
+                  >组员</el-button
+                >
+                <el-button link type="primary" size="small" @click="openTeamDialog('edit', row)"
+                  >编辑</el-button
+                >
+                <el-button link type="danger" size="small" @click="handleDeleteTeam(row)"
+                  >删除</el-button
+                >
               </template>
             </el-table-column>
           </el-table>
@@ -35,6 +46,7 @@
             v-model:page-size="teamPagination.pageSize"
             :page-sizes="[10, 20, 50, 100]"
             :total="teamPagination.total"
+            :hide-on-single-page="false"
             layout="total, sizes, prev, pager, next, jumper"
             class="pagination"
             @change="loadTeamList"
@@ -51,15 +63,32 @@
             <el-table-column prop="startTime" label="开始时间" width="140" />
             <el-table-column prop="endTime" label="结束时间" width="140" />
             <el-table-column prop="isActiveLabel" label="状态" width="100">
-              <template #default="{ row }">{{ row.isActiveLabel || (row.isActive === 1 ? '启用' : '停用') }}</template>
+              <template #default="{ row }">{{
+                row.isActiveLabel || (row.isActive === 1 ? '启用' : '停用')
+              }}</template>
             </el-table-column>
             <el-table-column label="操作" width="160" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" size="small" @click="openShiftDialog('edit', row)">编辑</el-button>
-                <el-button link type="danger" size="small" @click="handleDeleteShift(row)">删除</el-button>
+                <el-button link type="primary" size="small" @click="openShiftDialog('edit', row)"
+                  >编辑</el-button
+                >
+                <el-button link type="danger" size="small" @click="handleDeleteShift(row)"
+                  >删除</el-button
+                >
               </template>
             </el-table-column>
           </el-table>
+
+          <el-pagination
+            v-model:current-page="shiftPagination.pageNum"
+            v-model:page-size="shiftPagination.pageSize"
+            :page-sizes="[10, 20, 50, 100]"
+            :total="shiftPagination.total"
+            :hide-on-single-page="false"
+            layout="total, sizes, prev, pager, next, jumper"
+            class="pagination"
+            @change="loadShiftList"
+          />
         </el-tab-pane>
 
         <el-tab-pane label="排班管理" name="schedule">
@@ -71,14 +100,40 @@
               placeholder="按某天展开"
               class="search-select"
             />
-            <el-select v-model="scheduleSearch.userId" placeholder="人员" clearable filterable class="search-select">
+            <el-select
+              v-model="scheduleSearch.userId"
+              placeholder="人员"
+              clearable
+              filterable
+              class="search-select"
+            >
               <el-option v-for="u in userList" :key="u.id" :label="u.nickname" :value="u.id" />
             </el-select>
-            <el-select v-model="scheduleSearch.stationId" placeholder="工位" clearable class="search-select">
-              <el-option v-for="s in stationList" :key="s.stationId" :label="s.stationName" :value="s.stationId" />
+            <el-select
+              v-model="scheduleSearch.stationId"
+              placeholder="工位"
+              clearable
+              class="search-select"
+            >
+              <el-option
+                v-for="s in stationList"
+                :key="s.stationId"
+                :label="s.stationName"
+                :value="s.stationId"
+              />
             </el-select>
-            <el-select v-model="scheduleSearch.shiftId" placeholder="班次" clearable class="search-select">
-              <el-option v-for="s in shiftTable" :key="s.shiftId" :label="s.shiftName" :value="s.shiftId" />
+            <el-select
+              v-model="scheduleSearch.shiftId"
+              placeholder="班次"
+              clearable
+              class="search-select"
+            >
+              <el-option
+                v-for="s in shiftTable"
+                :key="s.shiftId"
+                :label="s.shiftName"
+                :value="s.shiftId"
+              />
             </el-select>
             <el-button type="primary" @click="handleScheduleSearch">搜索</el-button>
             <el-button @click="handleScheduleReset">重置</el-button>
@@ -96,7 +151,9 @@
               <template #default="{ row }">{{ row.endDate || row.startDate || '-' }}</template>
             </el-table-column>
             <el-table-column prop="repeatDaysLabel" label="重复规则" width="170">
-              <template #default="{ row }">{{ row.repeatDaysLabel || row.repeatDays || '每天' }}</template>
+              <template #default="{ row }">{{
+                row.repeatDaysLabel || row.repeatDays || '每天'
+              }}</template>
             </el-table-column>
             <el-table-column prop="shiftName" label="班次" width="120" />
             <el-table-column prop="userName" label="人员" width="120" />
@@ -105,8 +162,12 @@
             <el-table-column prop="createTime" label="创建时间" min-width="170" />
             <el-table-column label="操作" width="160" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" size="small" @click="openScheduleDialog('edit', row)">编辑</el-button>
-                <el-button link type="danger" size="small" @click="handleDeleteSchedule(row)">删除</el-button>
+                <el-button link type="primary" size="small" @click="openScheduleDialog('edit', row)"
+                  >编辑</el-button
+                >
+                <el-button link type="danger" size="small" @click="handleDeleteSchedule(row)"
+                  >删除</el-button
+                >
               </template>
             </el-table-column>
           </el-table>
@@ -116,6 +177,7 @@
             v-model:page-size="schedulePagination.pageSize"
             :page-sizes="[10, 20, 50, 100]"
             :total="schedulePagination.total"
+            :hide-on-single-page="false"
             layout="total, sizes, prev, pager, next, jumper"
             class="pagination"
             @change="loadScheduleList"
@@ -124,9 +186,24 @@
 
         <el-tab-pane label="交接班管理" name="handover">
           <div class="search-form">
-            <el-input v-model="handoverSearch.batchId" placeholder="批次ID" clearable class="search-input" />
-            <el-select v-model="handoverSearch.stationId" placeholder="工位" clearable class="search-select">
-              <el-option v-for="s in stationList" :key="s.stationId" :label="s.stationName" :value="s.stationId" />
+            <el-input
+              v-model="handoverSearch.batchId"
+              placeholder="批次ID"
+              clearable
+              class="search-input"
+            />
+            <el-select
+              v-model="handoverSearch.stationId"
+              placeholder="工位"
+              clearable
+              class="search-select"
+            >
+              <el-option
+                v-for="s in stationList"
+                :key="s.stationId"
+                :label="s.stationName"
+                :value="s.stationId"
+              />
             </el-select>
             <el-button type="primary" @click="handleHandoverSearch">搜索</el-button>
             <el-button @click="handleHandoverReset">重置</el-button>
@@ -142,7 +219,9 @@
             <el-table-column prop="handoverTime" label="交接时间" width="170" />
             <el-table-column label="操作" width="100" fixed="right">
               <template #default="{ row }">
-                <el-button link type="danger" size="small" @click="handleDeleteHandover(row)">删除</el-button>
+                <el-button link type="danger" size="small" @click="handleDeleteHandover(row)"
+                  >删除</el-button
+                >
               </template>
             </el-table-column>
           </el-table>
@@ -152,6 +231,7 @@
             v-model:page-size="handoverPagination.pageSize"
             :page-sizes="[10, 20, 50, 100]"
             :total="handoverPagination.total"
+            :hide-on-single-page="false"
             layout="total, sizes, prev, pager, next, jumper"
             class="pagination"
             @change="loadHandoverList"
@@ -161,14 +241,24 @@
     </el-card>
 
     <el-dialog v-model="teamDialogVisible" :title="teamDialogTitle" width="460px">
-      <el-form ref="teamFormRef" :model="teamForm" :rules="teamRules" label-width="90px">
-        <el-form-item label="班组名称" prop="teamName"><el-input v-model="teamForm.teamName" /></el-form-item>
+      <el-form
+        ref="teamFormRef"
+        :model="teamForm"
+        :rules="teamRules"
+        label-width="90px"
+        scroll-to-error
+      >
+        <el-form-item label="班组名称" prop="teamName"
+          ><el-input v-model="teamForm.teamName"
+        /></el-form-item>
         <el-form-item label="组长">
           <el-select v-model="teamForm.leaderId" clearable filterable>
             <el-option v-for="u in userList" :key="u.id" :label="u.nickname" :value="u.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="备注"><el-input v-model="teamForm.remark" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item label="备注"
+          ><el-input v-model="teamForm.remark" type="textarea" :rows="2"
+        /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="teamDialogVisible = false">取消</el-button>
@@ -178,7 +268,12 @@
 
     <el-dialog v-model="teamMemberDialogVisible" :title="teamMemberDialogTitle" width="620px">
       <div class="search-form" style="margin-bottom: 10px">
-        <el-select v-model="memberAssignUserId" placeholder="选择用户加入班组" filterable class="search-select">
+        <el-select
+          v-model="memberAssignUserId"
+          placeholder="选择用户加入班组"
+          filterable
+          class="search-select"
+        >
           <el-option v-for="u in assignableUsers" :key="u.id" :label="u.nickname" :value="u.id" />
         </el-select>
         <el-button type="primary" @click="handleAssignTeamMember">加入班组</el-button>
@@ -191,17 +286,31 @@
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button link type="danger" size="small" @click="handleRemoveTeamMember(row)">移除</el-button>
+            <el-button link type="danger" size="small" @click="handleRemoveTeamMember(row)"
+              >移除</el-button
+            >
           </template>
         </el-table-column>
       </el-table>
     </el-dialog>
 
     <el-dialog v-model="shiftDialogVisible" :title="shiftDialogTitle" width="460px">
-      <el-form ref="shiftFormRef" :model="shiftForm" :rules="shiftRules" label-width="90px">
-        <el-form-item label="班次名称" prop="shiftName"><el-input v-model="shiftForm.shiftName" /></el-form-item>
-        <el-form-item label="开始时间" prop="startTime"><el-time-picker v-model="shiftForm.startTime" value-format="HH:mm:ss" /></el-form-item>
-        <el-form-item label="结束时间" prop="endTime"><el-time-picker v-model="shiftForm.endTime" value-format="HH:mm:ss" /></el-form-item>
+      <el-form
+        ref="shiftFormRef"
+        :model="shiftForm"
+        :rules="shiftRules"
+        label-width="90px"
+        scroll-to-error
+      >
+        <el-form-item label="班次名称" prop="shiftName"
+          ><el-input v-model="shiftForm.shiftName"
+        /></el-form-item>
+        <el-form-item label="开始时间" prop="startTime"
+          ><el-time-picker v-model="shiftForm.startTime" value-format="HH:mm:ss"
+        /></el-form-item>
+        <el-form-item label="结束时间" prop="endTime"
+          ><el-time-picker v-model="shiftForm.endTime" value-format="HH:mm:ss"
+        /></el-form-item>
         <el-form-item label="是否启用">
           <el-select v-model="shiftForm.isActive">
             <el-option label="启用" :value="1" />
@@ -216,9 +325,19 @@
     </el-dialog>
 
     <el-dialog v-model="scheduleDialogVisible" :title="scheduleDialogTitle" width="480px">
-      <el-form ref="scheduleFormRef" :model="scheduleForm" :rules="scheduleRules" label-width="90px">
-        <el-form-item label="开始日期" prop="startDate"><el-date-picker v-model="scheduleForm.startDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
-        <el-form-item label="结束日期"><el-date-picker v-model="scheduleForm.endDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
+      <el-form
+        ref="scheduleFormRef"
+        :model="scheduleForm"
+        :rules="scheduleRules"
+        label-width="90px"
+        scroll-to-error
+      >
+        <el-form-item label="开始日期" prop="startDate"
+          ><el-date-picker v-model="scheduleForm.startDate" type="date" value-format="YYYY-MM-DD"
+        /></el-form-item>
+        <el-form-item label="结束日期"
+          ><el-date-picker v-model="scheduleForm.endDate" type="date" value-format="YYYY-MM-DD"
+        /></el-form-item>
         <el-form-item label="重复规则">
           <el-select v-model="repeatDaysArray" multiple clearable placeholder="不选=每天">
             <el-option label="周一" value="1" />
@@ -232,7 +351,12 @@
         </el-form-item>
         <el-form-item label="班次" prop="shiftId">
           <el-select v-model="scheduleForm.shiftId">
-            <el-option v-for="s in shiftTable" :key="s.shiftId" :label="s.shiftName" :value="s.shiftId" />
+            <el-option
+              v-for="s in shiftTable"
+              :key="s.shiftId"
+              :label="s.shiftName"
+              :value="s.shiftId"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="班组" required>
@@ -243,7 +367,12 @@
             placeholder="请先选择班组"
             @change="handleScheduleTeamChange"
           >
-            <el-option v-for="t in teamTable" :key="t.teamId" :label="t.teamName" :value="t.teamId" />
+            <el-option
+              v-for="t in teamTable"
+              :key="t.teamId"
+              :label="t.teamName"
+              :value="t.teamId"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="人员" prop="userId">
@@ -253,12 +382,22 @@
             :disabled="!scheduleTeamId"
             :placeholder="scheduleTeamId ? '请选择班组内人员' : '请先选择班组'"
           >
-            <el-option v-for="u in scheduleTeamUsers" :key="u.userId" :label="u.nickname" :value="u.userId" />
+            <el-option
+              v-for="u in scheduleTeamUsers"
+              :key="u.userId"
+              :label="u.nickname"
+              :value="u.userId"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="工位">
           <el-select v-model="scheduleForm.stationId" clearable>
-            <el-option v-for="s in stationList" :key="s.stationId" :label="s.stationName" :value="s.stationId" />
+            <el-option
+              v-for="s in stationList"
+              :key="s.stationId"
+              :label="s.stationName"
+              :value="s.stationId"
+            />
           </el-select>
         </el-form-item>
       </el-form>
@@ -269,19 +408,42 @@
     </el-dialog>
 
     <el-dialog v-model="batchByTeamDialogVisible" title="按班组批量排班" width="520px">
-      <el-form ref="batchByTeamFormRef" :model="batchByTeamForm" :rules="batchByTeamRules" label-width="100px">
+      <el-form
+        ref="batchByTeamFormRef"
+        :model="batchByTeamForm"
+        :rules="batchByTeamRules"
+        label-width="100px"
+        scroll-to-error
+      >
         <el-form-item label="班组" prop="teamId">
           <el-select v-model="batchByTeamForm.teamId" filterable>
-            <el-option v-for="t in teamTable" :key="t.teamId" :label="t.teamName" :value="t.teamId" />
+            <el-option
+              v-for="t in teamTable"
+              :key="t.teamId"
+              :label="t.teamName"
+              :value="t.teamId"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="班次" prop="shiftId">
           <el-select v-model="batchByTeamForm.shiftId">
-            <el-option v-for="s in shiftTable" :key="s.shiftId" :label="s.shiftName" :value="s.shiftId" />
+            <el-option
+              v-for="s in shiftTable"
+              :key="s.shiftId"
+              :label="s.shiftName"
+              :value="s.shiftId"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item label="开始日期" prop="startDate"><el-date-picker v-model="batchByTeamForm.startDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
-        <el-form-item label="结束日期"><el-date-picker v-model="batchByTeamForm.endDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
+        <el-form-item label="开始日期" prop="startDate"
+          ><el-date-picker
+            v-model="batchByTeamForm.startDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+        /></el-form-item>
+        <el-form-item label="结束日期"
+          ><el-date-picker v-model="batchByTeamForm.endDate" type="date" value-format="YYYY-MM-DD"
+        /></el-form-item>
         <el-form-item label="重复规则">
           <el-select v-model="batchRepeatDaysArray" multiple clearable placeholder="不选=每天">
             <el-option label="周一" value="1" />
@@ -295,7 +457,12 @@
         </el-form-item>
         <el-form-item label="工位">
           <el-select v-model="batchByTeamForm.stationId" clearable>
-            <el-option v-for="s in stationList" :key="s.stationId" :label="s.stationName" :value="s.stationId" />
+            <el-option
+              v-for="s in stationList"
+              :key="s.stationId"
+              :label="s.stationName"
+              :value="s.stationId"
+            />
           </el-select>
         </el-form-item>
       </el-form>
@@ -307,13 +474,22 @@
 
     <el-dialog v-model="availableDialogVisible" title="空闲人员查询" width="560px">
       <el-form :model="availableForm" label-width="90px" inline>
-        <el-form-item label="日期"><el-date-picker v-model="availableForm.workDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
+        <el-form-item label="日期"
+          ><el-date-picker v-model="availableForm.workDate" type="date" value-format="YYYY-MM-DD"
+        /></el-form-item>
         <el-form-item label="班次">
           <el-select v-model="availableForm.shiftId" clearable>
-            <el-option v-for="s in shiftTable" :key="s.shiftId" :label="s.shiftName" :value="s.shiftId" />
+            <el-option
+              v-for="s in shiftTable"
+              :key="s.shiftId"
+              :label="s.shiftName"
+              :value="s.shiftId"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item><el-button type="primary" @click="loadAvailableUsers">查询</el-button></el-form-item>
+        <el-form-item
+          ><el-button type="primary" @click="loadAvailableUsers">查询</el-button></el-form-item
+        >
       </el-form>
       <el-table :data="availableUsers" size="small">
         <el-table-column prop="userId" label="用户ID" width="120" />
@@ -329,14 +505,20 @@
             <el-option v-for="u in userList" :key="u.id" :label="u.nickname" :value="u.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="日期"><el-date-picker v-model="agendaForm.workDate" type="date" value-format="YYYY-MM-DD" /></el-form-item>
-        <el-form-item><el-button type="primary" @click="loadUserAgenda">查询</el-button></el-form-item>
+        <el-form-item label="日期"
+          ><el-date-picker v-model="agendaForm.workDate" type="date" value-format="YYYY-MM-DD"
+        /></el-form-item>
+        <el-form-item
+          ><el-button type="primary" @click="loadUserAgenda">查询</el-button></el-form-item
+        >
       </el-form>
 
       <el-descriptions title="排班安排" :column="1" border>
         <el-descriptions-item>
           <div v-if="agendaData?.schedules?.length">
-            <div v-for="it in agendaData.schedules" :key="it.scheduleId">{{ it.shiftName }} - {{ it.stationName }}</div>
+            <div v-for="it in agendaData.schedules" :key="it.scheduleId">
+              {{ it.shiftName }} - {{ it.stationName }}
+            </div>
           </div>
           <span v-else>无</span>
         </el-descriptions-item>
@@ -345,7 +527,9 @@
       <el-descriptions title="生产批次" :column="1" border style="margin-top: 12px">
         <el-descriptions-item>
           <div v-if="agendaData?.productionBatches?.length">
-            <div v-for="it in agendaData.productionBatches" :key="it.batchId">{{ it.batchNo }} / {{ it.woNo }}</div>
+            <div v-for="it in agendaData.productionBatches" :key="it.batchId">
+              {{ it.batchNo }} / {{ it.woNo }}
+            </div>
           </div>
           <span v-else>无</span>
         </el-descriptions-item>
@@ -354,7 +538,9 @@
       <el-descriptions title="维修任务" :column="1" border style="margin-top: 12px">
         <el-descriptions-item>
           <div v-if="agendaData?.repairOrders?.length">
-            <div v-for="it in agendaData.repairOrders" :key="it.repairId">{{ it.orderNo }} - {{ it.statusLabel }}</div>
+            <div v-for="it in agendaData.repairOrders" :key="it.repairId">
+              {{ it.orderNo }} - {{ it.statusLabel }}
+            </div>
           </div>
           <span v-else>无</span>
         </el-descriptions-item>
@@ -362,24 +548,49 @@
     </el-dialog>
 
     <el-dialog v-model="handoverDialogVisible" title="新增交接班" width="500px">
-      <el-form ref="handoverFormRef" :model="handoverForm" :rules="handoverRules" label-width="100px">
+      <el-form
+        ref="handoverFormRef"
+        :model="handoverForm"
+        :rules="handoverRules"
+        label-width="100px"
+        scroll-to-error
+      >
         <el-form-item label="工位" prop="stationId">
           <el-select v-model="handoverForm.stationId" filterable>
-            <el-option v-for="s in stationList" :key="s.stationId" :label="s.stationName" :value="s.stationId" />
+            <el-option
+              v-for="s in stationList"
+              :key="s.stationId"
+              :label="s.stationName"
+              :value="s.stationId"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item label="批次ID(可选)"><el-input v-model="handoverForm.batchId" /></el-form-item>
+        <el-form-item label="批次ID(可选)"
+          ><el-input v-model="handoverForm.batchId"
+        /></el-form-item>
         <el-form-item label="交班人" prop="fromUserId">
           <el-select v-model="handoverForm.fromUserId" filterable>
-            <el-option v-for="u in workerList" :key="u.userId" :label="u.nickname" :value="u.userId" />
+            <el-option
+              v-for="u in workerList"
+              :key="u.userId"
+              :label="u.nickname"
+              :value="u.userId"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="接班人" prop="toUserId">
           <el-select v-model="handoverForm.toUserId" filterable>
-            <el-option v-for="u in workerList" :key="u.userId" :label="u.nickname" :value="u.userId" />
+            <el-option
+              v-for="u in workerList"
+              :key="u.userId"
+              :label="u.nickname"
+              :value="u.userId"
+            />
           </el-select>
         </el-form-item>
-        <el-form-item label="交接内容"><el-input v-model="handoverForm.handoverContext" type="textarea" :rows="3" /></el-form-item>
+        <el-form-item label="交接内容"
+          ><el-input v-model="handoverForm.handoverContext" type="textarea" :rows="3"
+        /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="handoverDialogVisible = false">取消</el-button>
@@ -424,10 +635,10 @@ import {
   type Team,
   type TeamForm,
   type TeamMember,
-  type WorkerUser,
   type UserAgenda,
+  type WorkerUser,
 } from '@/api/schedule'
-import { getStationList, type Station } from '@/api/station'
+import { getStationOptions, type Station } from '@/api/station'
 import { getUserList, type User } from '@/api/user'
 import type { FormInstance } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -445,11 +656,17 @@ const teamSearch = reactive({ searchKey: '' })
 
 const shiftLoading = ref(false)
 const shiftTable = ref<Shift[]>([])
+const shiftPagination = reactive({ pageNum: 1, pageSize: 10, total: 0 })
 
 const scheduleLoading = ref(false)
 const scheduleTable = ref<Schedule[]>([])
 const schedulePagination = reactive({ pageNum: 1, pageSize: 20, total: 0 })
-const scheduleSearch = reactive<{ workDate?: string; userId?: number; stationId?: number; shiftId?: string }>({
+const scheduleSearch = reactive<{
+  workDate?: string
+  userId?: number
+  stationId?: number
+  shiftId?: string
+}>({
   workDate: undefined,
   userId: undefined,
   stationId: undefined,
@@ -459,14 +676,22 @@ const scheduleSearch = reactive<{ workDate?: string; userId?: number; stationId?
 const handoverLoading = ref(false)
 const handoverTable = ref<Handover[]>([])
 const handoverPagination = reactive({ pageNum: 1, pageSize: 10, total: 0 })
-const handoverSearch = reactive<{ batchId: string; stationId?: number }>({ batchId: '', stationId: undefined })
+const handoverSearch = reactive<{ batchId: string; stationId?: number }>({
+  batchId: '',
+  stationId: undefined,
+})
 
 const teamDialogVisible = ref(false)
 const teamDialogType = ref<'add' | 'edit'>('add')
 const teamDialogTitle = ref('新增班组')
 const teamFormRef = ref<FormInstance>()
-const teamForm = reactive<TeamForm & { teamId?: string }>({ teamId: undefined, teamName: '', leaderId: undefined, remark: '' })
-const teamRules = { teamName: [{ required: true, message: '班组名称不能为空', trigger: 'blur' }] }
+const teamForm = reactive<TeamForm & { teamId?: string }>({
+  teamId: undefined,
+  teamName: '',
+  leaderId: undefined,
+  remark: '',
+})
+const teamRules = { teamName: [{ required: true, message: '班组名称不能为空' }] }
 
 const teamMemberDialogVisible = ref(false)
 const teamMemberDialogTitle = ref('班组成员')
@@ -490,9 +715,9 @@ const shiftForm = reactive<ShiftForm & { shiftId?: string }>({
   isActive: 1,
 })
 const shiftRules = {
-  shiftName: [{ required: true, message: '班次名称不能为空', trigger: 'blur' }],
-  startTime: [{ required: true, message: '开始时间不能为空', trigger: 'change' }],
-  endTime: [{ required: true, message: '结束时间不能为空', trigger: 'change' }],
+  shiftName: [{ required: true, message: '班次名称不能为空' }],
+  startTime: [{ required: true, message: '开始时间不能为空' }],
+  endTime: [{ required: true, message: '结束时间不能为空' }],
 }
 
 const scheduleDialogVisible = ref(false)
@@ -512,9 +737,9 @@ const scheduleTeamId = ref('')
 const scheduleTeamUsers = ref<TeamMember[]>([])
 const teamMembersCache = reactive<Record<string, TeamMember[]>>({})
 const scheduleRules = {
-  startDate: [{ required: true, message: '开始日期不能为空', trigger: 'change' }],
-  shiftId: [{ required: true, message: '班次不能为空', trigger: 'change' }],
-  userId: [{ required: true, message: '人员不能为空', trigger: 'change' }],
+  startDate: [{ required: true, message: '开始日期不能为空' }],
+  shiftId: [{ required: true, message: '班次不能为空' }],
+  userId: [{ required: true, message: '人员不能为空' }],
 }
 const repeatDaysArray = ref<string[]>([])
 
@@ -537,13 +762,16 @@ const batchByTeamForm = reactive<{
 })
 const batchRepeatDaysArray = ref<string[]>([])
 const batchByTeamRules = {
-  teamId: [{ required: true, message: '班组不能为空', trigger: 'change' }],
-  shiftId: [{ required: true, message: '班次不能为空', trigger: 'change' }],
-  startDate: [{ required: true, message: '开始日期不能为空', trigger: 'change' }],
+  teamId: [{ required: true, message: '班组不能为空' }],
+  shiftId: [{ required: true, message: '班次不能为空' }],
+  startDate: [{ required: true, message: '开始日期不能为空' }],
 }
 
 const availableDialogVisible = ref(false)
-const availableForm = reactive<{ workDate: string; shiftId?: string }>({ workDate: '', shiftId: undefined })
+const availableForm = reactive<{ workDate: string; shiftId?: string }>({
+  workDate: '',
+  shiftId: undefined,
+})
 const availableUsers = ref<AvailableUser[]>([])
 
 const agendaDialogVisible = ref(false)
@@ -560,19 +788,19 @@ const handoverForm = reactive<HandoverForm>({
   handoverContext: '',
 })
 const handoverRules = {
-  stationId: [{ required: true, message: '工位不能为空', trigger: 'change' }],
-  fromUserId: [{ required: true, message: '交班人不能为空', trigger: 'change' }],
-  toUserId: [{ required: true, message: '接班人不能为空', trigger: 'change' }],
+  stationId: [{ required: true, message: '工位不能为空' }],
+  fromUserId: [{ required: true, message: '交班人不能为空' }],
+  toUserId: [{ required: true, message: '接班人不能为空' }],
 }
 
 const loadBaseOptions = async () => {
   const [uRes, sRes, wRes] = await Promise.all([
     getUserList({ pageSize: 1000 }),
-    getStationList({ pageSize: 1000 }),
+    getStationOptions(),
     getScheduleWorkers(),
   ])
   userList.value = uRes.data.records
-  stationList.value = sRes.data.records
+  stationList.value = sRes.data
   workerList.value = wRes.data
 }
 
@@ -627,8 +855,12 @@ const resolveScheduleTeamIdByUser = async (userId: number) => {
 const loadShiftList = async () => {
   shiftLoading.value = true
   try {
-    const res = await getShiftList({ pageNum: 1, pageSize: 100 })
+    const res = await getShiftList({
+      pageNum: shiftPagination.pageNum,
+      pageSize: shiftPagination.pageSize,
+    })
     shiftTable.value = res.data.records
+    shiftPagination.total = res.data.total
   } finally {
     shiftLoading.value = false
   }
@@ -720,11 +952,13 @@ const handleDeleteTeam = (row: Team) => {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
-  }).then(async () => {
-    await deleteTeam(row.teamId)
-    ElMessage.success('删除成功')
-    loadTeamList()
-  }).catch(() => {})
+  })
+    .then(async () => {
+      await deleteTeam(row.teamId)
+      ElMessage.success('删除成功')
+      loadTeamList()
+    })
+    .catch(() => {})
 }
 
 const openTeamMemberDialog = async (row: Team) => {
@@ -794,11 +1028,13 @@ const handleDeleteShift = (row: Shift) => {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
-  }).then(async () => {
-    await deleteShift(row.shiftId)
-    ElMessage.success('删除成功')
-    loadShiftList()
-  }).catch(() => {})
+  })
+    .then(async () => {
+      await deleteShift(row.shiftId)
+      ElMessage.success('删除成功')
+      loadShiftList()
+    })
+    .catch(() => {})
 }
 
 const handleScheduleSearch = () => {
@@ -881,11 +1117,13 @@ const handleDeleteSchedule = (row: Schedule) => {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
-  }).then(async () => {
-    await deleteSchedule(row.scheduleId)
-    ElMessage.success('删除成功')
-    loadScheduleList()
-  }).catch(() => {})
+  })
+    .then(async () => {
+      await deleteSchedule(row.scheduleId)
+      ElMessage.success('删除成功')
+      loadScheduleList()
+    })
+    .catch(() => {})
 }
 
 const openBatchByTeamDialog = () => {
@@ -923,7 +1161,10 @@ const loadAvailableUsers = async () => {
     ElMessage.warning('请先选择日期')
     return
   }
-  const res = await getAvailableUsers({ workDate: availableForm.workDate, shiftId: availableForm.shiftId })
+  const res = await getAvailableUsers({
+    workDate: availableForm.workDate,
+    shiftId: availableForm.shiftId,
+  })
   availableUsers.value = res.data
 }
 
@@ -986,11 +1227,13 @@ const handleDeleteHandover = (row: Handover) => {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
-  }).then(async () => {
-    await deleteHandover(row.handoverId)
-    ElMessage.success('删除成功')
-    loadHandoverList()
-  }).catch(() => {})
+  })
+    .then(async () => {
+      await deleteHandover(row.handoverId)
+      ElMessage.success('删除成功')
+      loadHandoverList()
+    })
+    .catch(() => {})
 }
 
 onMounted(async () => {
@@ -1001,11 +1244,31 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.container { padding: 20px; }
-.box-card { margin-bottom: 20px; }
-.card-header { display: flex; justify-content: space-between; align-items: center; }
-.search-form { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
-.search-input { width: 220px; }
-.search-select { width: 180px; }
-.pagination { margin-top: 16px; text-align: right; }
+.container {
+  padding: 20px;
+}
+.box-card {
+  margin-bottom: 20px;
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.search-form {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.search-input {
+  width: 220px;
+}
+.search-select {
+  width: 180px;
+}
+.pagination {
+  margin-top: 16px;
+  text-align: right;
+}
 </style>

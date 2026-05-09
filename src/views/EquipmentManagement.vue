@@ -60,19 +60,23 @@
         </el-table-column>
       </el-table>
 
-      <el-pagination
-        v-model:current-page="pagination.pageNum"
-        v-model:page-size="pagination.pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="pagination.total"
-        layout="total, sizes, prev, pager, next, jumper"
-        class="pagination"
-        @change="getList"
-      />
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="pagination.pageNum"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="pagination.total"
+          :hide-on-single-page="false"
+          layout="total, sizes, prev, pager, next, jumper"
+          class="pagination"
+          @current-change="getList"
+          @size-change="getList"
+        />
+      </div>
     </el-card>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="520px">
-      <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px">
+      <el-form ref="formRef" :model="formData" :rules="rules" label-width="100px" scroll-to-error>
         <el-form-item v-if="dialogType === 'edit'" label="设备编码">
           <el-input v-model="formData.equipCode" disabled />
         </el-form-item>
@@ -182,10 +186,14 @@ import {
   type EquipmentDetail,
   type EquipmentForm,
 } from '@/api/equipment'
-import { getStationList, type Station } from '@/api/station'
+import { getStationOptions, type Station } from '@/api/station'
 import type { FormInstance } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
+
+type EquipmentDialogForm = Omit<EquipmentForm, 'stationId'> & {
+  stationId?: number
+}
 
 const loading = ref(false)
 const dialogVisible = ref(false)
@@ -202,19 +210,19 @@ const searchForm = reactive<{ searchKey: string; stationId?: number; status?: nu
   status: undefined,
 })
 
-const formData = reactive<EquipmentForm>({
+const formData = reactive<EquipmentDialogForm>({
   equipCode: '',
   equipName: '',
   model: '',
-  stationId: 0,
+  stationId: undefined,
   status: 1,
   installDate: '',
   expiryDate: '',
 })
 
 const rules = {
-  equipName: [{ required: true, message: '设备名称不能为空', trigger: 'blur' }],
-  stationId: [{ required: true, message: '工位不能为空', trigger: 'change' }],
+  equipName: [{ required: true, message: '设备名称不能为空' }],
+  stationId: [{ required: true, message: '工位不能为空' }],
 }
 
 const statusDialogVisible = ref(false)
@@ -242,8 +250,8 @@ const getList = async () => {
 }
 
 const loadStationList = async () => {
-  const res = await getStationList({ pageSize: 1000 })
-  stationList.value = res.data.records
+  const res = await getStationOptions()
+  stationList.value = res.data
 }
 
 const handleSearch = () => {
@@ -267,7 +275,7 @@ const openDialog = (type: 'add' | 'edit') => {
     formData.equipCode = ''
     formData.equipName = ''
     formData.model = ''
-    formData.stationId = 0
+    formData.stationId = undefined
     formData.status = 1
     formData.installDate = ''
     formData.expiryDate = ''
@@ -295,10 +303,10 @@ const handleSubmit = async () => {
   await formRef.value.validate(async (valid) => {
     if (!valid) return
     if (dialogType.value === 'add') {
-      await addEquipment(formData)
+      await addEquipment(formData as EquipmentForm)
       ElMessage.success('新增成功')
     } else {
-      await updateEquipment((formData as any).equipId, formData)
+      await updateEquipment((formData as any).equipId, formData as EquipmentForm)
       ElMessage.success('修改成功')
     }
     dialogVisible.value = false
@@ -370,8 +378,9 @@ onMounted(() => {
 .search-select {
   width: 160px;
 }
-.pagination {
+.pagination-container {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

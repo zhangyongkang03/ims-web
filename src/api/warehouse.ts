@@ -21,6 +21,17 @@ export interface PageResult<T> {
   records: T[]
 }
 
+function normalizeWarehouse(raw: any): Warehouse {
+  return {
+    whId: String(raw?.whId ?? ''),
+    whCode: String(raw?.whCode ?? ''),
+    whName: String(raw?.whName ?? ''),
+    whType: raw?.whType == null ? undefined : Number(raw.whType),
+    createTime: raw?.createTime,
+    updateTime: raw?.updateTime,
+  }
+}
+
 /**
  * 分页查询仓库列表
  */
@@ -30,21 +41,34 @@ export function getWarehouseList(params: {
   searchKey?: string
   whType?: number
 }) {
-  return request.get<ApiResponse<PageResult<Warehouse>>>('/warehouses', { params })
+  return request.get<ApiResponse<PageResult<Warehouse>>>('/warehouses', { params }).then((res) => ({
+    ...res,
+    data: {
+      ...res.data,
+      total: Number(res.data?.total ?? 0),
+      records: Array.isArray(res.data?.records) ? res.data.records.map(normalizeWarehouse) : [],
+    },
+  }))
 }
 
 /**
  * 查询所有仓库（下拉）
  */
 export function getWarehouseAll() {
-  return request.get<ApiResponse<Warehouse[]>>('/warehouses/all')
+  return request.get<ApiResponse<Warehouse[]>>('/warehouses/all').then((res) => ({
+    ...res,
+    data: Array.isArray(res.data) ? res.data.map(normalizeWarehouse) : [],
+  }))
 }
 
 /**
  * 获取仓库详情
  */
 export function getWarehouseDetail(whId: string) {
-  return request.get<ApiResponse<Warehouse>>(`/warehouses/${whId}`)
+  return request.get<ApiResponse<Warehouse>>(`/warehouses/${whId}`).then((res) => ({
+    ...res,
+    data: normalizeWarehouse(res.data),
+  }))
 }
 
 /**

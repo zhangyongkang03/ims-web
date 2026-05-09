@@ -13,18 +13,21 @@
       </el-tabs>
 
       <div class="search-form">
-        <el-select v-model="searchForm.mId" placeholder="选择物料" clearable class="search-select">
-          <el-option v-for="m in materialList" :key="m.mid" :label="m.mname" :value="m.mid" />
-        </el-select>
+        <el-input
+          v-model="searchForm.materialNameKeyword"
+          placeholder="输入物料编码或名称"
+          clearable
+          class="search-select"
+        />
         <el-button type="primary" @click="handleSearch">查询</el-button>
         <el-button @click="handleReset">重置</el-button>
       </div>
 
       <el-table :data="tableData" stripe style="width: 100%" v-loading="loading">
-        <el-table-column prop="materialId" label="物料ID" width="100" />
+        <el-table-column prop="materialId" label="物料编码" width="140" />
         <el-table-column prop="materialName" label="物料名称" width="180" />
         <el-table-column prop="totalQuantity" label="库存数量" width="140" />
-        <el-table-column prop="unit" label="单位" width="100" />
+        <el-table-column prop="unitName" label="单位" width="100" />
         <el-table-column prop="lastPurchaseDate" label="最近采购时间" width="180" />
         <el-table-column prop="updateTime" label="更新时间" width="180" />
         <el-table-column label="操作" width="120" fixed="right">
@@ -35,12 +38,22 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <el-pagination
+        v-model:current-page="pagination.pageNum"
+        v-model:page-size="pagination.pageSize"
+        :page-sizes="[10, 20, 50, 100]"
+        :total="pagination.total"
+        :hide-on-single-page="false"
+        layout="total, sizes, prev, pager, next, jumper"
+        class="pagination"
+        @change="getList"
+      />
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { getMaterialList, type Material } from '@/api/material'
 import { getMaterialStockList, type MaterialStock } from '@/api/materialStock'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -48,19 +61,31 @@ import { useRoute, useRouter } from 'vue-router'
 
 const loading = ref(false)
 const tableData = ref<MaterialStock[]>([])
-const materialList = ref<Material[]>([])
 const route = useRoute()
 const router = useRouter()
 
-const searchForm = reactive<{ mId?: number }>({
-  mId: undefined,
+const searchForm = reactive<{ materialNameKeyword: string }>({
+  materialNameKeyword: '',
+})
+
+const pagination = reactive({
+  pageNum: 1,
+  pageSize: 10,
+  total: 0,
 })
 
 const getList = async () => {
+  const materialNameKeyword = searchForm.materialNameKeyword.trim()
+
   loading.value = true
   try {
-    const res = await getMaterialStockList({ mId: searchForm.mId })
-    tableData.value = res.data
+    const res = await getMaterialStockList({
+      pageNum: pagination.pageNum,
+      pageSize: pagination.pageSize,
+      searchKey: materialNameKeyword || undefined,
+    })
+    tableData.value = res.data.records || []
+    pagination.total = res.data.total || 0
   } catch (error) {
     console.error('获取库存列表失败:', error)
   } finally {
@@ -68,21 +93,14 @@ const getList = async () => {
   }
 }
 
-const loadMaterialList = async () => {
-  try {
-    const res = await getMaterialList({ pageSize: 1000 })
-    materialList.value = res.data.records
-  } catch (error) {
-    console.error('加载物料列表失败:', error)
-  }
-}
-
 const handleSearch = () => {
+  pagination.pageNum = 1
   getList()
 }
 
 const handleReset = () => {
-  searchForm.mId = undefined
+  searchForm.materialNameKeyword = ''
+  pagination.pageNum = 1
   getList()
 }
 
@@ -121,7 +139,6 @@ const handleViewDistribution = async (row: MaterialStock) => {
 
 onMounted(() => {
   getList()
-  loadMaterialList()
 })
 </script>
 
@@ -153,5 +170,10 @@ onMounted(() => {
 
 .search-select {
   width: 220px;
+}
+
+.pagination {
+  margin-top: 16px;
+  justify-content: flex-end;
 }
 </style>

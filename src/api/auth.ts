@@ -7,6 +7,27 @@ export interface LoginParams {
   password: string
 }
 
+export type AuthMenuType = 'M' | 'C' | 'F'
+
+export interface AuthMenu {
+  id: string | number
+  parentId?: string | number
+  menuName: string
+  path: string
+  component?: string | null
+  perms?: string | null
+  menuType: AuthMenuType
+  children?: AuthMenu[] | null
+}
+
+export interface AuthInfo {
+  userId: string | number
+  username: string
+  roles: string[]
+  permissions: string[]
+  menus: AuthMenu[]
+}
+
 /**
  * 用户登录
  */
@@ -15,5 +36,15 @@ export function login(data: LoginParams) {
     url: '/auth/login',
     method: 'post',
     data,
+  })
+}
+
+/**
+ * 获取当前登录用户信息（角色/权限/菜单）
+ */
+export function getAuthInfo() {
+  return request<ApiResponse<AuthInfo>>({
+    url: '/auth/info',
+    method: 'get',
   })
 }

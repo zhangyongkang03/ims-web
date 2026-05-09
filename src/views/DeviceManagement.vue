@@ -44,8 +44,6 @@
         </el-table-column>
         <el-table-column prop="stationName" label="工位" width="140" />
         <el-table-column prop="equipName" label="挂载设备" width="160" />
-        <el-table-column prop="kafkaTopic" label="Kafka Topic" min-width="180" />
-        <el-table-column prop="redisKey" label="Redis Key" min-width="180" />
         <el-table-column prop="statusLabel" label="状态" width="90">
           <template #default="{ row }">{{
             row.statusLabel || (row.status === 1 ? '启用' : '停用')
@@ -59,15 +57,19 @@
         </el-table-column>
       </el-table>
 
-      <el-pagination
-        v-model:current-page="pagination.pageNum"
-        v-model:page-size="pagination.pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="pagination.total"
-        layout="total, sizes, prev, pager, next, jumper"
-        @change="getList"
-        class="pagination"
-      />
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="pagination.pageNum"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="pagination.total"
+          :hide-on-single-page="false"
+          layout="total, sizes, prev, pager, next, jumper"
+          @current-change="getList"
+          @size-change="getList"
+          class="pagination"
+        />
+      </div>
     </el-card>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="560px">
@@ -77,6 +79,7 @@
         :rules="rules"
         label-width="100px"
         label-position="right"
+        scroll-to-error
       >
         <el-form-item label="工位" prop="stationId">
           <el-select
@@ -109,11 +112,7 @@
           <el-input v-model="formData.deviceName" />
         </el-form-item>
         <el-form-item label="传感器类型" prop="deviceType">
-          <el-select v-model="formData.deviceType" placeholder="选择类型">
-            <el-option label="TEMP" value="TEMP" />
-            <el-option label="FLOW" value="FLOW" />
-            <el-option label="PRESS" value="PRESS" />
-          </el-select>
+          <el-input v-model="formData.deviceType" placeholder="请输入传感器类型" />
         </el-form-item>
         <el-form-item label="分析类别">
           <el-select
@@ -124,12 +123,6 @@
             <el-option label="工艺环境（趋势预测）" value="PROCESS" />
             <el-option label="逐瓶检测（设备精度评估）" value="PER_BOTTLE" />
           </el-select>
-        </el-form-item>
-        <el-form-item label="Kafka Topic">
-          <el-input v-model="formData.kafkaTopic" />
-        </el-form-item>
-        <el-form-item label="Redis Key">
-          <el-input v-model="formData.redisKey" />
         </el-form-item>
         <el-form-item label="状态" prop="status">
           <el-select v-model="formData.status">
@@ -156,11 +149,15 @@ import {
   type DeviceForm,
 } from '@/api/device'
 import { getEquipmentList, type Equipment } from '@/api/equipment'
-import { getStationList, type Station } from '@/api/station'
+import { getStationOptions, type Station } from '@/api/station'
 import type { FormInstance } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
+
+type DeviceDialogForm = Omit<DeviceForm, 'stationId'> & {
+  stationId?: number
+}
 
 const route = useRoute()
 const loading = ref(false)
@@ -178,12 +175,12 @@ const searchForm = reactive<{ searchKey: string; stationId?: number }>({
   stationId: undefined,
 })
 
-const formData = reactive<DeviceForm>({
-  stationId: 0,
+const formData = reactive<DeviceDialogForm>({
+  stationId: undefined,
   equipId: undefined,
   deviceCode: '',
   deviceName: '',
-  deviceType: 'TEMP',
+  deviceType: '',
   sensorCategory: undefined,
   kafkaTopic: '',
   redisKey: '',
@@ -201,10 +198,10 @@ const getSensorCategoryLabel = (sensorCategory?: 'PROCESS' | 'PER_BOTTLE' | null
 }
 
 const rules = {
-  stationId: [{ required: true, message: '工位不能为空', trigger: 'change' }],
-  deviceCode: [{ required: true, message: '传感器编码不能为空', trigger: 'blur' }],
-  deviceName: [{ required: true, message: '传感器名称不能为空', trigger: 'blur' }],
-  deviceType: [{ required: true, message: '传感器类型不能为空', trigger: 'change' }],
+  stationId: [{ required: true, message: '工位不能为空' }],
+  deviceCode: [{ required: true, message: '传感器编码不能为空' }],
+  deviceName: [{ required: true, message: '传感器名称不能为空' }],
+  deviceType: [{ required: true, message: '传感器类型不能为空' }],
 }
 
 const filteredEquipmentList = computed(() => {
@@ -230,8 +227,8 @@ const getList = async () => {
 }
 
 const loadStationList = async () => {
-  const res = await getStationList({ pageSize: 1000 })
-  stationList.value = res.data.records
+  const res = await getStationOptions()
+  stationList.value = res.data
 }
 
 const loadEquipmentList = async () => {
@@ -264,11 +261,11 @@ const openDialog = (type: 'add' | 'edit') => {
   dialogTitle.value = type === 'add' ? '新增传感器' : '编辑传感器'
   if (type === 'add') {
     formData.deviceId = undefined
-    formData.stationId = searchForm.stationId || 0
+    formData.stationId = searchForm.stationId
     formData.equipId = undefined
     formData.deviceCode = ''
     formData.deviceName = ''
-    formData.deviceType = 'TEMP'
+    formData.deviceType = ''
     formData.sensorCategory = undefined
     formData.kafkaTopic = ''
     formData.redisKey = ''
@@ -299,10 +296,10 @@ const handleSubmit = async () => {
   await formRef.value.validate(async (valid) => {
     if (!valid) return
     if (dialogType.value === 'add') {
-      await addDevice(formData)
+      await addDevice(formData as DeviceForm)
       ElMessage.success('新增成功')
     } else {
-      await updateDevice(formData.deviceId!, formData)
+      await updateDevice(formData.deviceId!, formData as DeviceForm)
       ElMessage.success('修改成功')
     }
     dialogVisible.value = false
@@ -315,9 +312,9 @@ const handleDelete = (row: Device) => {
     `确定删除传感器「${row.deviceName || row.deviceCode}（${row.deviceCode}）」吗？`,
     '警告',
     {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
     },
   )
     .then(async () => {
@@ -363,8 +360,9 @@ onMounted(() => {
 .search-select {
   width: 180px;
 }
-.pagination {
+.pagination-container {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

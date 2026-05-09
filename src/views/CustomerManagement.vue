@@ -62,8 +62,10 @@
         v-model:page-size="pagination.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         :total="pagination.total"
+        :hide-on-single-page="false"
         layout="total, sizes, prev, pager, next, jumper"
-        @change="getList"
+        @current-change="handleCurrentPageChange"
+        @size-change="handlePageSizeChange"
         class="pagination"
       />
     </el-card>
@@ -75,6 +77,7 @@
         :rules="rules"
         label-width="100px"
         label-position="right"
+        scroll-to-error
       >
         <el-form-item v-if="dialogType === 'edit'" label="客户编码">
           <el-input v-model="formData.custCode" disabled />
@@ -171,9 +174,9 @@ const formData = reactive<CustomerForm>({
 })
 
 const rules = {
-  custName: [{ required: true, message: '客户名称不能为空', trigger: 'blur' }],
-  custType: [{ required: true, message: '客户类型不能为空', trigger: 'change' }],
-  status: [{ required: true, message: '状态不能为空', trigger: 'change' }],
+  custName: [{ required: true, message: '客户名称不能为空' }],
+  custType: [{ required: true, message: '客户类型不能为空' }],
+  status: [{ required: true, message: '状态不能为空' }],
 }
 
 const getList = async () => {
@@ -186,7 +189,7 @@ const getList = async () => {
       searchStatus: searchForm.searchStatus,
     })
     tableData.value = res.data.records || []
-    pagination.total = res.data.total || 0
+    pagination.total = Number(res.data.total || 0)
   } catch (error) {
     console.error('获取客户列表失败:', error)
   } finally {
@@ -195,6 +198,17 @@ const getList = async () => {
 }
 
 const handleSearch = () => {
+  pagination.pageNum = 1
+  getList()
+}
+
+const handleCurrentPageChange = (pageNum: number) => {
+  pagination.pageNum = pageNum
+  getList()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
   pagination.pageNum = 1
   getList()
 }
@@ -316,7 +330,8 @@ getList()
 
 .pagination {
   margin-top: 20px;
-  text-align: right;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .dialog-footer {

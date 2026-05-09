@@ -40,7 +40,7 @@
 
     <!-- 新增/编辑弹窗 -->
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="460px">
-      <el-form ref="formRef" :model="formData" :rules="rules" label-width="110px">
+      <el-form ref="formRef" :model="formData" :rules="rules" label-width="110px" scroll-to-error>
         <el-form-item label="配置名称" prop="configName">
           <el-input v-model="formData.configName" placeholder="如：默认配置" />
         </el-form-item>
@@ -86,8 +86,8 @@ const formData = reactive<AiModelConfigForm>({
 })
 
 const rules = {
-  configName: [{ required: true, message: '配置名称不能为空', trigger: 'blur' }],
-  modelName: [{ required: true, message: '模型名称不能为空', trigger: 'blur' }],
+  configName: [{ required: true, message: '配置名称不能为空' }],
+  modelName: [{ required: true, message: '模型名称不能为空' }],
 }
 
 const loadConfigs = async () => {

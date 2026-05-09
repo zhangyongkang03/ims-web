@@ -27,6 +27,28 @@ export interface PageResult<T> {
   records: T[]
 }
 
+function normalizeUser(raw: any): User {
+  return {
+    id: Number(raw?.id ?? 0),
+    username: String(raw?.username ?? ''),
+    nickname: String(raw?.nickname ?? ''),
+    employeeNo: String(raw?.employeeNo ?? ''),
+    status: Boolean(raw?.status),
+    createTime: String(raw?.createTime ?? ''),
+    updateTime: String(raw?.updateTime ?? ''),
+    roles: Array.isArray(raw?.roles)
+      ? raw.roles.map((role: any) => ({
+          roleId: Number(role?.roleId ?? 0),
+          roleName: String(role?.roleName ?? ''),
+          roleKey: String(role?.roleKey ?? ''),
+        }))
+      : [],
+    permissions: Array.isArray(raw?.permissions)
+      ? raw.permissions.map((permission: any) => String(permission))
+      : [],
+  }
+}
+
 // 用户表单
 export interface UserForm {
   id?: number
@@ -51,7 +73,14 @@ export function getUserList(params: {
     url: '/users',
     method: 'get',
     params,
-  })
+  }).then((res) => ({
+    ...res,
+    data: {
+      ...res.data,
+      total: Number(res.data?.total ?? 0),
+      records: Array.isArray(res.data?.records) ? res.data.records.map(normalizeUser) : [],
+    },
+  }))
 }
 
 /**
@@ -61,7 +90,10 @@ export function getUserDetail(userId: number) {
   return request<ApiResponse<User>>({
     url: `/users/${userId}`,
     method: 'get',
-  })
+  }).then((res) => ({
+    ...res,
+    data: normalizeUser(res.data),
+  }))
 }
 
 /**
