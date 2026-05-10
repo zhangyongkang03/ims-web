@@ -9,7 +9,6 @@ export const backendToFrontendPathMap: Record<string, string> = {
   '/material/product': '/material/product',
   '/stock/material': '/material/stock',
   '/stock/product': '/stock/product',
-  '/basic/shift': '/base/schedule',
   '/basic/alarm': '/base/alarm',
   '/basic/warehouse': '/base/wms',
   '/ai/chat': '/ai/chat',

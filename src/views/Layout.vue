@@ -85,6 +85,13 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
+const BASIC_MENU_PATH = '/basic'
+const STOCK_MENU_PATH = '/stock'
+const AI_MENU_PATH = '/ai'
+const SHIFT_MENU_PATH = '/basic/shift'
+const WAREHOUSE_MENU_PATH = '/basic/warehouse'
+const ALARM_MENU_PATH = '/basic/alarm'
+
 const toFrontendPath = (path: string) => normalizeMenuPath(path)
 
 const hasMenuPermission = (menu: AuthMenu) => {
@@ -111,9 +118,52 @@ const reorderEquipmentChildren = (menu: AuthMenu, children: AuthMenu[]) => {
   })
 }
 
+const cloneMenuTree = (menus: AuthMenu[]): AuthMenu[] => {
+  return menus.map((menu) => ({
+    ...menu,
+    children: Array.isArray(menu.children) ? cloneMenuTree(menu.children) : [],
+  }))
+}
+
+const appendChildIfMissing = (menu: AuthMenu | undefined, child: AuthMenu | undefined) => {
+  if (!menu || !child) return
+  const children = Array.isArray(menu.children) ? menu.children : []
+  if (children.some((item) => item.path === child.path)) return
+  menu.children = [...children, child]
+}
+
+const regroupTopLevelMenus = (menus: AuthMenu[]) => {
+  const clonedMenus = cloneMenuTree(menus)
+  const basicMenu = clonedMenus.find((menu) => menu.path === BASIC_MENU_PATH)
+  if (!basicMenu || !Array.isArray(basicMenu.children)) {
+    return clonedMenus
+  }
+
+  const stockMenu = clonedMenus.find((menu) => menu.path === STOCK_MENU_PATH)
+  const aiMenu = clonedMenus.find((menu) => menu.path === AI_MENU_PATH)
+  const warehouseMenu = basicMenu.children.find((menu) => menu.path === WAREHOUSE_MENU_PATH)
+  const alarmMenu = basicMenu.children.find((menu) => menu.path === ALARM_MENU_PATH)
+
+  appendChildIfMissing(stockMenu, warehouseMenu)
+  appendChildIfMissing(aiMenu, alarmMenu)
+
+  basicMenu.children = basicMenu.children.filter((menu) => {
+    if (menu.path === SHIFT_MENU_PATH) return false
+    if (menu.path === WAREHOUSE_MENU_PATH && stockMenu) return false
+    if (menu.path === ALARM_MENU_PATH && aiMenu) return false
+    return true
+  })
+
+  return clonedMenus.filter((menu) => {
+    if (menu.path !== BASIC_MENU_PATH) return true
+    return Array.isArray(menu.children) && menu.children.length > 0
+  })
+}
+
 const filterMenus = (menus: AuthMenu[]): AuthMenu[] => {
   return menus
     .filter((menu) => menu && menu.path)
+    .filter((menu) => menu.path !== SHIFT_MENU_PATH)
     .map((menu) => {
       const children = Array.isArray(menu.children)
         ? reorderEquipmentChildren(menu, filterMenus(menu.children))
@@ -136,7 +186,7 @@ const sidebarMenus = computed(() => {
   if (!userStore.authInfoLoaded) {
     return []
   }
-  return filterMenus(userStore.menus)
+  return filterMenus(regroupTopLevelMenus(userStore.menus))
 })
 
 const getVisibleChildren = (menu: AuthMenu) => (Array.isArray(menu.children) ? menu.children : [])
@@ -188,7 +238,6 @@ const currentRoute = computed(() => {
     '/material/stock': '材料库存',
     '/stock/product': '产成品库存',
     '/base/recipe': '配方管理',
-    '/base/schedule': '排班与交接班',
     '/base/alarm': '异常报警',
     '/base/wms': '仓库与库位管理',
     '/order/order': '工单管理',
