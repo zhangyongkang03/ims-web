@@ -3,24 +3,20 @@
     <el-card class="box-card">
       <template #header>
         <div class="card-header">
-          <span>批次质量分析报告</span>
+          <div class="title-wrap">
+            <span>批次质量分析报告</span>
+            <el-tag v-if="currentBatchNo" type="info">批次 {{ currentBatchNo }}</el-tag>
+          </div>
         </div>
       </template>
 
-      <div class="search-form">
-        <el-input
-          v-model="searchForm.batchNo"
-          placeholder="请输入批次号（如 B202605010001）"
-          clearable
-          class="search-input"
-        />
-        <el-button type="primary" :loading="loading" @click="handleGenerate">
-          {{ loading ? '正在生成...' : '生成报告' }}
-        </el-button>
-        <el-button :disabled="!searchForm.batchNo || loading" @click="handleClearCache"
-          >清除缓存</el-button
-        >
-      </div>
+      <el-alert
+        type="info"
+        show-icon
+        :closable="false"
+        class="entry-tip"
+        title="报告由后端在批次完成后自动生成，此页面仅用于从生产报告、溯源等页面钻取查看。"
+      />
 
       <el-alert
         v-if="loading"
@@ -28,10 +24,18 @@
         show-icon
         :closable="false"
         class="loading-tip"
-        title="正在生成 AI 质量报告，请稍候（约 30 秒）..."
+        :title="loadingMessage"
       />
 
-      <el-empty v-if="!report" description="输入批次号后生成质量报告" />
+      <el-empty
+        v-if="!report && !currentBatchNo && !loading"
+        description="请从生产报告或溯源页面进入批次质量报告详情"
+      />
+
+      <el-empty
+        v-else-if="!report && currentBatchNo && !loading"
+        description="当前批次报告暂未生成完成，请稍后重试"
+      />
 
       <div v-else class="report-wrapper">
         <el-alert
@@ -39,7 +43,7 @@
           show-icon
           :closable="false"
           class="report-meta"
-          :title="`报告生成时间：${report.generatedAt || '-'}，缓存TTL：${report.cacheTtlSeconds ?? 1800}秒`"
+          :title="`报告生成时间：${report?.generatedAt || '-'}，缓存TTL：${report?.cacheTtlSeconds ?? 1800}秒`"
         />
 
         <el-card shadow="never" class="section-card">
@@ -268,7 +272,6 @@
 
 <script setup lang="ts">
 import {
-  clearBatchQualityCache,
   getBatchQualityReport,
   getBatchQualityTimeSeries,
   type BatchAiAssessment,
@@ -280,11 +283,17 @@ import {
   type BatchStationStat,
   type BatchTimeSeriesPoint,
 } from '@/api/batchQuality'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+const RETRY_INTERVAL_MS = 3000
+const MAX_RETRY_COUNT = 2
 
 const loading = ref(false)
 const report = ref<BatchQualityReport | null>(null)
+const loadingMessage = ref('正在查询批次质量报告...')
 
 const timeSeriesVisible = ref(false)
 const timeSeriesLoading = ref(false)
@@ -294,6 +303,8 @@ const timeSeriesList = ref<BatchTimeSeriesPoint[]>([])
 const searchForm = reactive({
   batchNo: '',
 })
+
+const currentBatchNo = computed(() => searchForm.batchNo.trim())
 
 const basicInfo = computed<BatchQualityBasicInfo>(() => {
   const source = (report.value?.basicInfo || {}) as BatchQualityBasicInfo
@@ -662,36 +673,62 @@ const sanitizeReport = (raw: BatchQualityReportRaw | BatchQualityReport): BatchQ
   }
 }
 
-const handleGenerate = async () => {
-  if (!searchForm.batchNo.trim()) {
-    ElMessage.warning('请先输入批次号')
-    return
+const hasUsableReportData = (
+  raw: BatchQualityReportRaw | BatchQualityReport | null | undefined,
+) => {
+  if (!raw || typeof raw !== 'object') return false
+  const candidate = raw as Record<string, unknown>
+  return Boolean(
+    candidate.batchNo ||
+    candidate.reportTime ||
+    candidate.basicInfo ||
+    candidate.equipmentStatsList ||
+    candidate.processQualityList ||
+    candidate.stationStats ||
+    candidate.stationStatsList,
+  )
+}
+
+const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
+
+const loadReport = async (batchNo: string, retryCount = 0) => {
+  const normalizedBatchNo = batchNo.trim()
+  if (!normalizedBatchNo) return false
+
+  loadingMessage.value =
+    retryCount > 0 ? `报告生成中，正在第 ${retryCount + 1} 次查询...` : '正在查询批次质量报告...'
+  const res = await getBatchQualityReport(normalizedBatchNo)
+  if (hasUsableReportData(res.data)) {
+    report.value = sanitizeReport(res.data || {})
+    return true
   }
+
+  if (retryCount >= MAX_RETRY_COUNT) {
+    report.value = null
+    return false
+  }
+
+  await sleep(RETRY_INTERVAL_MS)
+  return loadReport(normalizedBatchNo, retryCount + 1)
+}
+
+const loadCurrentBatchReport = async (batchNo: string) => {
+  const normalizedBatchNo = batchNo.trim()
+  searchForm.batchNo = normalizedBatchNo
+  report.value = null
+
+  if (!normalizedBatchNo) return
 
   loading.value = true
   try {
-    const res = await getBatchQualityReport(searchForm.batchNo.trim())
-    report.value = sanitizeReport(res.data || {})
-    ElMessage.success('质量报告生成成功')
+    const loaded = await loadReport(normalizedBatchNo)
+    if (!loaded) {
+      ElMessage.info('报告可能仍在生成中，请稍后刷新')
+    }
   } finally {
     loading.value = false
+    loadingMessage.value = '正在查询批次质量报告...'
   }
-}
-
-const handleClearCache = async () => {
-  if (!searchForm.batchNo.trim()) {
-    ElMessage.warning('请先输入批次号')
-    return
-  }
-
-  await ElMessageBox.confirm(`确认清除批次 ${searchForm.batchNo} 的缓存？`, '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning',
-  })
-
-  await clearBatchQualityCache(searchForm.batchNo.trim())
-  ElMessage.success('缓存已清除')
 }
 
 const openTimeSeries = async (row: BatchStationStat) => {
@@ -714,6 +751,20 @@ const openTimeSeries = async (row: BatchStationStat) => {
     timeSeriesLoading.value = false
   }
 }
+
+onMounted(async () => {
+  const initialBatchNo = String(route.query.batchNo || '').trim()
+  await loadCurrentBatchReport(initialBatchNo)
+})
+
+watch(
+  () => route.query.batchNo,
+  async (value) => {
+    const nextBatchNo = String(value || '').trim()
+    if (nextBatchNo === currentBatchNo.value) return
+    await loadCurrentBatchReport(nextBatchNo)
+  },
+)
 </script>
 
 <style scoped>
@@ -731,16 +782,14 @@ const openTimeSeries = async (row: BatchStationStat) => {
   align-items: center;
 }
 
-.search-form {
-  margin-bottom: 12px;
+.title-wrap {
   display: flex;
-  gap: 10px;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 10px;
 }
 
-.search-input {
-  width: 320px;
+.entry-tip {
+  margin-bottom: 12px;
 }
 
 .loading-tip {

@@ -19,13 +19,23 @@
                 <el-icon><Menu /></el-icon>
                 <span>{{ menu.menuName }}</span>
               </template>
-              <el-menu-item
-                v-for="child in getVisibleChildren(menu)"
-                :key="String(child.id)"
-                :index="toFrontendPath(child.path)"
-              >
-                <span>{{ child.menuName }}</span>
-              </el-menu-item>
+              <template v-for="child in getVisibleChildren(menu)" :key="String(child.id)">
+                <el-sub-menu v-if="isGroupMenu(child)" :index="child.path">
+                  <template #title>
+                    <span>{{ child.menuName }}</span>
+                  </template>
+                  <el-menu-item
+                    v-for="grandChild in getVisibleChildren(child)"
+                    :key="String(grandChild.id)"
+                    :index="toFrontendPath(grandChild.path)"
+                  >
+                    <span>{{ grandChild.menuName }}</span>
+                  </el-menu-item>
+                </el-sub-menu>
+                <el-menu-item v-else :index="toFrontendPath(child.path)">
+                  <span>{{ child.menuName }}</span>
+                </el-menu-item>
+              </template>
             </el-sub-menu>
             <el-menu-item v-else :index="resolveMenuPath(menu)">
               <el-icon><Monitor /></el-icon>
@@ -91,6 +101,14 @@ const AI_MENU_PATH = '/ai'
 const SHIFT_MENU_PATH = '/basic/shift'
 const WAREHOUSE_MENU_PATH = '/basic/warehouse'
 const ALARM_MENU_PATH = '/basic/alarm'
+const BASIC_MANAGEMENT_MENU_PATH = '/management/basic'
+const LOG_MANAGEMENT_MENU_PATH = '/management/log'
+const AI_PRODUCTION_REPORT_PATH = '/ai/production-report'
+const AI_KNOWLEDGE_PATH = '/ai/knowledge'
+const AI_RULES_PATH = '/ai/rules'
+const AI_DECISION_LOG_MENU_PATH = '/ai/decision-log'
+const AI_DECISIONS_PATH = '/ai/decisions'
+const HIDDEN_MENU_PATHS = new Set(['/ai/quality'])
 
 const toFrontendPath = (path: string) => normalizeMenuPath(path)
 
@@ -118,6 +136,35 @@ const reorderEquipmentChildren = (menu: AuthMenu, children: AuthMenu[]) => {
   })
 }
 
+const reorderVirtualGroupChildren = (menuName: string, children: AuthMenu[]) => {
+  if (children.length < 2) {
+    return children
+  }
+
+  const orderWeightByGroup: Record<string, Record<string, number>> = {
+    基础管理: {
+      [AI_KNOWLEDGE_PATH]: 0,
+      [AI_RULES_PATH]: 1,
+    },
+    日志管理: {
+      [ALARM_MENU_PATH]: 0,
+      [AI_DECISION_LOG_MENU_PATH]: 1,
+      [AI_DECISIONS_PATH]: 1,
+    },
+  }
+
+  const orderWeight = orderWeightByGroup[menuName]
+  if (!orderWeight) {
+    return children
+  }
+
+  return [...children].sort((left, right) => {
+    const leftWeight = orderWeight[left.path] ?? Number.MAX_SAFE_INTEGER
+    const rightWeight = orderWeight[right.path] ?? Number.MAX_SAFE_INTEGER
+    return leftWeight - rightWeight
+  })
+}
+
 const cloneMenuTree = (menus: AuthMenu[]): AuthMenu[] => {
   return menus.map((menu) => ({
     ...menu,
@@ -131,6 +178,34 @@ const appendChildIfMissing = (menu: AuthMenu | undefined, child: AuthMenu | unde
   if (children.some((item) => item.path === child.path)) return
   menu.children = [...children, child]
 }
+
+const createVirtualTopMenu = (
+  id: string,
+  menuName: string,
+  path: string,
+  children: AuthMenu[],
+) => ({
+  id,
+  parentId: '0',
+  menuName,
+  path,
+  menuType: 'M' as const,
+  children: reorderVirtualGroupChildren(menuName, children),
+})
+
+const createVirtualChildMenu = (
+  id: string,
+  parentId: string,
+  menuName: string,
+  path: string,
+): AuthMenu => ({
+  id,
+  parentId,
+  menuName,
+  path,
+  menuType: 'C',
+  children: [],
+})
 
 const regroupTopLevelMenus = (menus: AuthMenu[]) => {
   const clonedMenus = cloneMenuTree(menus)
@@ -146,6 +221,37 @@ const regroupTopLevelMenus = (menus: AuthMenu[]) => {
 
   appendChildIfMissing(stockMenu, warehouseMenu)
   appendChildIfMissing(aiMenu, alarmMenu)
+  appendChildIfMissing(
+    aiMenu,
+    createVirtualChildMenu(
+      'virtual-ai-production-report',
+      AI_MENU_PATH,
+      '产品生产报告',
+      AI_PRODUCTION_REPORT_PATH,
+    ),
+  )
+
+  const aiChildren = Array.isArray(aiMenu?.children) ? aiMenu.children : []
+  const basicManagementChildren = aiChildren.filter(
+    (menu) => menu.path === AI_KNOWLEDGE_PATH || menu.path === AI_RULES_PATH,
+  )
+  const logManagementChildren = aiChildren.filter(
+    (menu) =>
+      menu.path === AI_DECISION_LOG_MENU_PATH ||
+      menu.path === AI_DECISIONS_PATH ||
+      menu.path === ALARM_MENU_PATH,
+  )
+
+  if (aiMenu) {
+    aiMenu.children = aiChildren.filter(
+      (menu) =>
+        menu.path !== AI_KNOWLEDGE_PATH &&
+        menu.path !== AI_RULES_PATH &&
+        menu.path !== AI_DECISION_LOG_MENU_PATH &&
+        menu.path !== AI_DECISIONS_PATH &&
+        menu.path !== ALARM_MENU_PATH,
+    )
+  }
 
   basicMenu.children = basicMenu.children.filter((menu) => {
     if (menu.path === SHIFT_MENU_PATH) return false
@@ -154,16 +260,41 @@ const regroupTopLevelMenus = (menus: AuthMenu[]) => {
     return true
   })
 
-  return clonedMenus.filter((menu) => {
+  const normalizedMenus = clonedMenus.filter((menu) => {
     if (menu.path !== BASIC_MENU_PATH) return true
     return Array.isArray(menu.children) && menu.children.length > 0
   })
+
+  if (basicManagementChildren.length) {
+    normalizedMenus.push(
+      createVirtualTopMenu(
+        'virtual-basic-management',
+        '基础管理',
+        BASIC_MANAGEMENT_MENU_PATH,
+        basicManagementChildren,
+      ),
+    )
+  }
+
+  if (logManagementChildren.length) {
+    normalizedMenus.push(
+      createVirtualTopMenu(
+        'virtual-log-management',
+        '日志管理',
+        LOG_MANAGEMENT_MENU_PATH,
+        logManagementChildren,
+      ),
+    )
+  }
+
+  return normalizedMenus
 }
 
 const filterMenus = (menus: AuthMenu[]): AuthMenu[] => {
   return menus
     .filter((menu) => menu && menu.path)
     .filter((menu) => menu.path !== SHIFT_MENU_PATH)
+    .filter((menu) => !HIDDEN_MENU_PATHS.has(menu.path))
     .map((menu) => {
       const children = Array.isArray(menu.children)
         ? reorderEquipmentChildren(menu, filterMenus(menu.children))
@@ -251,6 +382,7 @@ const currentRoute = computed(() => {
     '/ai/knowledge': '知识库管理',
     '/ai/rules': '规则配置',
     '/ai/batch-quality': '批次质量报告',
+    '/ai/production-report': '产品生产报告',
     '/ai/traceability': '全流程溯源',
     '/ai/device-report': '设备运行日报',
   }

@@ -13,13 +13,16 @@
         <div class="card-header">
           <span>工单信息</span>
           <div>
-            <el-button v-if="canStartBatch" type="primary" @click="openStartBatchDialog"
-              >启动新批次</el-button
+            <el-button v-if="canStartMixing" type="primary" @click="handleStartMixing"
+              >开始配液</el-button
             >
-            <el-button
-              v-if="detail && (detail.status === 1 || detail.status === 2)"
-              type="warning"
-              @click="handleCloseOrder"
+            <el-button v-if="canCompleteMixing" type="success" @click="handleCompleteMixing"
+              >完成配液</el-button
+            >
+            <el-button v-if="canStartFilling" type="primary" @click="openStartBatchDialog"
+              >启动罐装批次</el-button
+            >
+            <el-button v-if="canCloseOrder" type="warning" @click="handleCloseOrder"
               >关闭工单</el-button
             >
           </div>
@@ -39,6 +42,12 @@
           detail.plannedStart || '-'
         }}</el-descriptions-item>
         <el-descriptions-item label="计划结束">{{ detail.plannedEnd || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="配液开始">{{
+          detail.mixingStartTime || '-'
+        }}</el-descriptions-item>
+        <el-descriptions-item label="配液完成">{{
+          detail.mixingEndTime || '-'
+        }}</el-descriptions-item>
         <el-descriptions-item label="生产进度">
           <div style="width: 200px">
             <span>{{ detail.completedQty }} / {{ detail.targetQty }}</span>
@@ -48,34 +57,40 @@
       </el-descriptions>
     </el-card>
 
+    <!-- 配液投料记录 -->
+    <el-card class="box-card" style="margin-top: 16px">
+      <template #header>
+        <span>配液投料记录</span>
+      </template>
+
+      <el-table :data="mixingConsumptionList" stripe style="width: 100%" empty-text="暂无投料记录">
+        <el-table-column prop="lotNo" label="原料批次号" width="180" />
+        <el-table-column prop="mCode" label="原料编码" width="140">
+          <template #default="{ row }">{{ row.mCode || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="mName" label="原料名称" width="160">
+          <template #default="{ row }">{{ row.mName || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="consumeQty" label="消耗量" width="100" align="center" />
+        <el-table-column prop="uom" label="单位" width="90" align="center" />
+        <el-table-column prop="feedTime" label="投料时间" width="170" />
+        <el-table-column prop="sourceTypeLabel" label="来源" min-width="120" />
+      </el-table>
+    </el-card>
+
     <!-- 批次列表 -->
     <el-card class="box-card" style="margin-top: 16px">
       <template #header>
-        <span>批次记录</span>
+        <span>罐装批次记录</span>
       </template>
 
-      <el-table :data="detail?.batchList || []" stripe style="width: 100%" row-key="batchId">
-        <el-table-column type="expand">
-          <template #default="{ row }">
-            <div style="padding: 12px 48px">
-              <h4 style="margin-bottom: 8px">投料明细</h4>
-              <el-table
-                v-if="row.consumptionList && row.consumptionList.length"
-                :data="row.consumptionList"
-                size="small"
-                border
-              >
-                <el-table-column prop="lotNo" label="物料批次号" width="180" />
-                <el-table-column prop="mName" label="物料名称" width="140" />
-                <el-table-column prop="consumeQty" label="消耗量" width="100" />
-                <el-table-column prop="uom" label="单位" width="80" />
-                <el-table-column prop="feedTime" label="投料时间" width="170" />
-                <el-table-column prop="sourceTypeLabel" label="来源" width="100" />
-              </el-table>
-              <el-empty v-else description="暂无投料记录" :image-size="60" />
-            </div>
-          </template>
-        </el-table-column>
+      <el-table
+        :data="detail?.batchList || []"
+        stripe
+        style="width: 100%"
+        row-key="batchId"
+        empty-text="暂无罐装批次"
+      >
         <el-table-column prop="batchNo" label="批次号" width="200" />
         <el-table-column prop="targetQty" label="计划产量" width="100" align="center" />
         <el-table-column prop="actualQty" label="实际产出" width="100" align="center" />
@@ -85,12 +100,14 @@
         </el-table-column>
         <el-table-column prop="batchStatusLabel" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.batchStatus === 1 ? 'success' : 'info'">
+            <el-tag :type="row.batchStatus === 1 ? 'warning' : 'success'">
               {{ row.batchStatusLabel }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="operatorName" label="操作员" width="100" />
+        <el-table-column prop="operatorName" label="操作员" width="100">
+          <template #default="{ row }">{{ row.operatorName || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="startTime" label="开始时间" width="170" />
         <el-table-column prop="endTime" label="结束时间" width="170">
           <template #default="{ row }">{{ row.endTime || '-' }}</template>
@@ -105,14 +122,14 @@
                 >完成</el-button
               >
             </template>
-            <span v-else style="color: #909399; font-size: 12px">展开查看投料</span>
+            <span v-else style="color: #909399; font-size: 12px">已完成</span>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
 
     <!-- 启动批次弹窗 -->
-    <el-dialog v-model="startBatchVisible" title="启动新批次" width="400px">
+    <el-dialog v-model="startBatchVisible" title="启动罐装批次" width="400px">
       <el-form label-width="110px">
         <el-form-item label="剩余产量">
           <span style="font-weight: bold; color: #e6a23c">{{ remaining }}</span>
@@ -167,9 +184,11 @@ import { getUserList, type User } from '@/api/user'
 import {
   closeWorkOrder,
   completeBatch,
+  completeMixing,
   getWorkOrderDetail,
   reportBatch,
-  startBatch,
+  startFilling,
+  startMixing,
   type Batch,
   type WorkOrderDetail,
 } from '@/api/workOrder'
@@ -197,23 +216,45 @@ const progressPercent = computed(() => {
   return Math.min(Math.round((detail.value.completedQty / detail.value.targetQty) * 100), 100)
 })
 
+const mixingConsumptionList = computed(() => {
+  return (detail.value?.mixingConsumptionList || []).map((item) => ({
+    ...item,
+    mId: item.mId ?? Number(item.mid),
+    mName: item.mName || item.mname || '-',
+    mCode: item.mCode || item.mcode || '-',
+  }))
+})
+
 const hasRunningBatch = computed(() => {
   return detail.value?.batchList?.some((b) => b.batchStatus === 1) ?? false
 })
 
-const canStartBatch = computed(() => {
+const canStartMixing = computed(() => detail.value?.status === 0)
+
+const canCompleteMixing = computed(() => detail.value?.status === 1)
+
+const canStartFilling = computed(() => {
   if (!detail.value) return false
-  const s = detail.value.status
-  // 待生产(0) 或 生产中(1) 且没有运行中批次 且有剩余产量
-  return (s === 0 || s === 1) && !hasRunningBatch.value && remaining.value > 0
+  return (
+    (detail.value.status === 2 || detail.value.status === 3) &&
+    !hasRunningBatch.value &&
+    remaining.value > 0
+  )
+})
+
+const canCloseOrder = computed(() => {
+  if (!detail.value) return false
+  return detail.value.status !== 5 && !hasRunningBatch.value
 })
 
 const statusTagType = (status: number): 'info' | 'warning' | 'success' | 'danger' => {
   const map: Record<number, 'info' | 'warning' | 'success' | 'danger'> = {
     0: 'info',
     1: 'warning',
-    2: 'success',
-    3: 'danger',
+    2: 'warning',
+    3: 'warning',
+    4: 'success',
+    5: 'danger',
   }
   return map[status] ?? 'info'
 }
@@ -234,6 +275,43 @@ const loadUsers = async () => {
   userList.value = res.data.records
 }
 
+// ---- 配液 ----
+const handleStartMixing = () => {
+  ElMessageBox.confirm('确定开始配液吗？系统将一次性完成原料扣减。', '确认', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  })
+    .then(async () => {
+      try {
+        await startMixing(woId)
+        ElMessage.success('已开始配液')
+        loadDetail()
+      } catch (error) {
+        console.error('开始配液失败:', error)
+      }
+    })
+    .catch(() => {})
+}
+
+const handleCompleteMixing = () => {
+  ElMessageBox.confirm('确定完成配液并进入待罐装状态吗？', '确认', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  })
+    .then(async () => {
+      try {
+        await completeMixing(woId)
+        ElMessage.success('配液已完成')
+        loadDetail()
+      } catch (error) {
+        console.error('完成配液失败:', error)
+      }
+    })
+    .catch(() => {})
+}
+
 // ---- 启动批次 ----
 const startBatchVisible = ref(false)
 const batchForm = reactive({ batchTargetQty: 0, operatorId: undefined as number | undefined })
@@ -251,15 +329,15 @@ const handleStartBatch = async () => {
   }
   submitLoading.value = true
   try {
-    const res = await startBatch(woId, {
+    const res = await startFilling(woId, {
       batchTargetQty: batchForm.batchTargetQty,
       operatorId: batchForm.operatorId,
     })
-    ElMessage.success(`批次已启动，批次号: ${res.data}`)
+    ElMessage.success(`罐装批次已启动，批次号: ${res.data}`)
     startBatchVisible.value = false
     loadDetail()
   } catch (error) {
-    console.error('启动批次失败:', error)
+    console.error('启动罐装批次失败:', error)
   } finally {
     submitLoading.value = false
   }

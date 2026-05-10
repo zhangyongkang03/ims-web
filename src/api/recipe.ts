@@ -39,6 +39,8 @@ export interface RecipeDetail {
   inputUnit?: string
   createTime?: string
   updateTime?: string
+  phase: number
+  phaseLabel?: string
 }
 
 // 配方明细表单
@@ -46,6 +48,7 @@ export interface RecipeDetailForm {
   detailId?: number
   recipeId: number
   mId: number
+  phase: number
   standardQty: number
   unit: string
   inputUnit?: string

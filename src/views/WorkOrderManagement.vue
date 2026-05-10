@@ -26,9 +26,11 @@
           class="search-select"
         >
           <el-option label="待生产" :value="0" />
-          <el-option label="生产中" :value="1" />
-          <el-option label="已完成" :value="2" />
-          <el-option label="已关闭" :value="3" />
+          <el-option label="配液中" :value="1" />
+          <el-option label="待罐装" :value="2" />
+          <el-option label="罐装中" :value="3" />
+          <el-option label="已完成" :value="4" />
+          <el-option label="已关闭" :value="5" />
         </el-select>
         <el-button type="primary" @click="handleSearch">搜索</el-button>
         <el-button @click="handleReset">重置</el-button>
@@ -44,7 +46,7 @@
           <template #default="{ row }">
             <span>{{ row.completedQty }} / {{ row.targetQty }}</span>
             <el-progress
-              :percentage="Math.min(Math.round((row.completedQty / row.targetQty) * 100), 100)"
+              :percentage="getProgressPercent(row)"
               :stroke-width="6"
               style="margin-top: 2px"
             />
@@ -58,8 +60,14 @@
         </el-table-column>
         <el-table-column prop="plannedStart" label="计划开始" width="170" />
         <el-table-column prop="plannedEnd" label="计划结束" width="170" />
+        <el-table-column prop="mixingStartTime" label="配液开始" width="170">
+          <template #default="{ row }">{{ row.mixingStartTime || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="mixingEndTime" label="配液完成" width="170">
+          <template #default="{ row }">{{ row.mixingEndTime || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="createTime" label="创建时间" width="170" />
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="row.status === 0"
@@ -75,11 +83,27 @@
               link
               type="success"
               size="small"
-              @click="goDetail(row)"
-              >启动批次</el-button
+              @click="handleStartMixing(row)"
+              >开始配液</el-button
             >
             <el-button
-              v-if="row.status === 1 || row.status === 2"
+              v-if="row.status === 1"
+              link
+              type="warning"
+              size="small"
+              @click="handleCompleteMixing(row)"
+              >完成配液</el-button
+            >
+            <el-button
+              v-if="row.status === 2 || row.status === 3"
+              link
+              type="success"
+              size="small"
+              @click="goDetail(row)"
+              >罐装批次</el-button
+            >
+            <el-button
+              v-if="canCloseFromList(row)"
               link
               type="warning"
               size="small"
@@ -123,12 +147,7 @@
         scroll-to-error
       >
         <el-form-item label="产品" prop="pId">
-          <el-select
-            v-model="formData.pId"
-            placeholder="选择产品"
-            filterable
-            @change="onProductChange"
-          >
+          <el-select v-model="formData.pId" placeholder="选择产品" filterable>
             <el-option v-for="p in productList" :key="p.pid" :label="p.pname" :value="p.pid" />
           </el-select>
         </el-form-item>
@@ -144,16 +163,6 @@
               :key="c.custId"
               :label="c.custName"
               :value="c.custId"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="配方" prop="recipeId">
-          <el-select v-model="formData.recipeId" placeholder="选择配方" filterable>
-            <el-option
-              v-for="r in recipeList"
-              :key="r.recipeId"
-              :label="r.recipeName"
-              :value="r.recipeId"
             />
           </el-select>
         </el-form-item>
@@ -188,12 +197,13 @@
 <script setup lang="ts">
 import { getCustomerList, type Customer } from '@/api/customer'
 import { getProductOptions, type Product } from '@/api/product'
-import { getRecipeList, type Recipe } from '@/api/recipe'
 import {
   addWorkOrder,
   closeWorkOrder,
+  completeMixing,
   deleteWorkOrder,
   getWorkOrderList,
+  startMixing,
   updateWorkOrder,
   type WorkOrder,
   type WorkOrderForm,
@@ -211,7 +221,6 @@ const dialogTitle = ref('新增工单')
 const formRef = ref<FormInstance>()
 const tableData = ref<WorkOrder[]>([])
 const productList = ref<Product[]>([])
-const recipeList = ref<Recipe[]>([])
 const customerList = ref<Customer[]>([])
 
 const pagination = reactive({ pageNum: 1, pageSize: 10, total: 0 })
@@ -225,7 +234,6 @@ const searchForm = reactive<{ searchKey: string; pId?: number; status?: number }
 const formData = reactive<WorkOrderForm>({
   pId: undefined,
   customerId: undefined,
-  recipeId: undefined,
   targetQty: 1000,
   plannedStart: undefined,
   plannedEnd: undefined,
@@ -233,7 +241,6 @@ const formData = reactive<WorkOrderForm>({
 
 const rules = {
   pId: [{ required: true, message: '请选择产品' }],
-  recipeId: [{ required: true, message: '请选择配方' }],
   targetQty: [{ required: true, message: '请输入计划产量' }],
 }
 
@@ -241,10 +248,21 @@ const statusTagType = (status: number): 'info' | 'warning' | 'success' | 'danger
   const map: Record<number, 'info' | 'warning' | 'success' | 'danger'> = {
     0: 'info',
     1: 'warning',
-    2: 'success',
-    3: 'danger',
+    2: 'warning',
+    3: 'warning',
+    4: 'success',
+    5: 'danger',
   }
   return map[status] ?? 'info'
+}
+
+const getProgressPercent = (row: WorkOrder) => {
+  if (!row.targetQty) return 0
+  return Math.min(Math.round((row.completedQty / row.targetQty) * 100), 100)
+}
+
+const canCloseFromList = (row: WorkOrder) => {
+  return row.status === 0 || row.status === 2 || row.status === 4
 }
 
 // ---- 列表 ----
@@ -289,26 +307,7 @@ const handleReset = () => {
   getList()
 }
 
-const loadRecipeOptions = async (productId?: number) => {
-  if (!productId) {
-    recipeList.value = []
-    return
-  }
-
-  const res = await getRecipeList({
-    pageSize: 1000,
-    pId: productId,
-    isActive: 1,
-  })
-  recipeList.value = res.data.records || []
-}
-
 // ---- 新增/编辑 ----
-const onProductChange = async () => {
-  formData.recipeId = undefined
-  await loadRecipeOptions(formData.pId)
-}
-
 const openDialog = (type: 'add' | 'edit') => {
   dialogType.value = type
   dialogTitle.value = type === 'add' ? '新增工单' : '编辑工单'
@@ -316,11 +315,9 @@ const openDialog = (type: 'add' | 'edit') => {
     formData.woId = undefined
     formData.pId = undefined
     formData.customerId = undefined
-    formData.recipeId = undefined
     formData.targetQty = 1000
     formData.plannedStart = undefined
     formData.plannedEnd = undefined
-    recipeList.value = []
   }
   dialogVisible.value = true
 }
@@ -328,15 +325,41 @@ const openDialog = (type: 'add' | 'edit') => {
 const handleEdit = async (row: WorkOrder) => {
   dialogType.value = 'edit'
   dialogTitle.value = '编辑工单'
-  await loadRecipeOptions(row.pId)
   formData.woId = row.woId
   formData.pId = row.pId
   formData.customerId = row.customerId
-  formData.recipeId = row.recipeId
   formData.targetQty = row.targetQty
   formData.plannedStart = row.plannedStart
   formData.plannedEnd = row.plannedEnd
   dialogVisible.value = true
+}
+
+const handleStartMixing = (row: WorkOrder) => {
+  ElMessageBox.confirm('确定开始配液吗？系统将按 FEFO 一次性扣减全部原料。', '确认', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  })
+    .then(async () => {
+      await startMixing(row.woId)
+      ElMessage.success('已开始配液')
+      getList()
+    })
+    .catch(() => {})
+}
+
+const handleCompleteMixing = (row: WorkOrder) => {
+  ElMessageBox.confirm('确定完成配液并进入待罐装状态吗？', '确认', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  })
+    .then(async () => {
+      await completeMixing(row.woId)
+      ElMessage.success('配液已完成')
+      getList()
+    })
+    .catch(() => {})
 }
 
 const handleSubmit = async () => {

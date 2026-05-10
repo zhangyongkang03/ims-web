@@ -1,4 +1,4 @@
-import type { ApiResponse } from './request'
+import type { ApiRequestConfig, ApiResponse } from './request'
 import request from './request'
 
 export type ProcessType =
@@ -22,6 +22,7 @@ export interface AiAnalysisResult {
   finalDecision: string
   statsSnapshot: string
   analysisTime: string
+  sensorCount?: number
 }
 
 export interface AiAnalyzeRequest {
@@ -139,8 +140,14 @@ export interface AiModelConfigForm {
   temperature: number
 }
 
-export type DeviceTrend = 'UP' | 'DOWN' | 'STABLE'
+export type DeviceTrend = 'UP' | 'DOWN' | 'STABLE' | 'IMPROVING' | 'DECLINING'
 export type DeviceUrgency = 'HIGH' | 'MEDIUM' | 'LOW'
+
+export interface DeviceDailyTrendPoint {
+  date: string
+  healthScore?: number | string
+  alarmCount?: number | string
+}
 
 export interface DeviceSensorSummary {
   deviceCode: string
@@ -157,11 +164,15 @@ export interface DeviceEquipmentSummary {
   equipCode: string
   equipName: string
   processType: string
-  alarmCount: number | string
-  healthScore: number | string
+  alarmCount?: number | string
+  totalAlarmCount?: number | string
+  healthScore?: number | string
+  avgHealthScore?: number | string
   trend: DeviceTrend
   runningDays: number | string
   sensorSummaries?: DeviceSensorSummary[]
+  dailyHealthTrend?: DeviceDailyTrendPoint[]
+  dailyAlarmTrend?: DeviceDailyTrendPoint[]
 }
 
 export interface DeviceAlarmTopItem {
@@ -181,14 +192,38 @@ export interface DeviceMaintenanceSuggestion {
 }
 
 export interface DeviceDailyReport {
-  reportDate: string
+  reportType?: 'DAILY' | 'WEEKLY' | 'MONTHLY'
+  reportDate?: string
+  startDate?: string
+  endDate?: string
   generateTime: string
   equipmentSummaries?: DeviceEquipmentSummary[]
   // backward compatibility
   deviceSummaries?: DeviceSensorSummary[]
   alarmTopDevices: DeviceAlarmTopItem[]
-  aiDailyOverview: string
+  aiDailyOverview?: string
+  aiOverview?: string
   maintenanceSuggestions: DeviceMaintenanceSuggestion[]
+}
+
+export type DeviceReport = DeviceDailyReport
+
+async function getWithFallback<T>(urls: string[], config?: ApiRequestConfig) {
+  let lastError: unknown
+
+  for (const [index, url] of urls.entries()) {
+    try {
+      return await request.get<T>(url, {
+        ...config,
+        skipErrorLog: index < urls.length - 1,
+        skipErrorMessage: index < urls.length - 1,
+      })
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw lastError
 }
 
 export function triggerAiAnalyze(data: AiAnalyzeRequest) {
@@ -196,7 +231,10 @@ export function triggerAiAnalyze(data: AiAnalyzeRequest) {
 }
 
 export function getAiLatest(deviceCode: string) {
-  return request.get<ApiResponse<AiAnalysisResult>>(`/ai/latest/${deviceCode}`)
+  return getWithFallback<ApiResponse<AiAnalysisResult>>([
+    `/ai-decision/latest/${deviceCode}`,
+    `/ai/latest/${deviceCode}`,
+  ])
 }
 
 export function getAiHistory(params: {
@@ -205,7 +243,12 @@ export function getAiHistory(params: {
   deviceCode?: string
   riskLevel?: string
 }) {
-  return request.get<ApiResponse<AiHistoryPageResult>>('/ai/history', { params })
+  return getWithFallback<ApiResponse<AiHistoryPageResult>>(
+    ['/ai-decision/history', '/ai/history'],
+    {
+      params,
+    },
+  )
 }
 
 export function getAiDecisions(params: {
@@ -290,4 +333,16 @@ export function getDeviceDailyReportByDate(date?: string) {
 
 export function getTodayDeviceDailyReport() {
   return request.get<ApiResponse<DeviceDailyReport>>('/device-report/daily/today')
+}
+
+export function getDeviceWeeklyReportByDate(date?: string) {
+  return request.get<ApiResponse<DeviceReport>>('/device-report/weekly', {
+    params: date ? { date } : undefined,
+  })
+}
+
+export function getDeviceMonthlyReportByDate(date?: string) {
+  return request.get<ApiResponse<DeviceReport>>('/device-report/monthly', {
+    params: date ? { date } : undefined,
+  })
 }

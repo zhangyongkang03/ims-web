@@ -4,6 +4,8 @@ import { ElNotification } from 'element-plus'
 const ALARM_PUSH_EVENT = 'alarm-push'
 const DASHBOARD_PUSH_EVENT = 'dashboard-push'
 const AI_ANALYSIS_PUSH_EVENT = 'ai-analysis-push'
+const FAST_RISK_PUSH_EVENT = 'fast-risk-push'
+const WS_STATUS_EVENT = 'ws-status'
 const ALARM_WS_URL = import.meta.env.VITE_ALARM_WS_URL || 'ws://localhost:8080/ws/alarm'
 
 const alarmEventBus = new EventTarget()
@@ -38,6 +40,23 @@ export interface AiAnalysisPushData {
   analysisTime: string
 }
 
+export interface FastRiskPushData {
+  deviceCode: string
+  batchNo: string
+  processType: string
+  currentValue: number
+  riskFast: number
+  riskLevel: string
+  deviation: number
+  slope: number
+  volatility: number
+  etaSeconds: number
+  target: number
+  minThreshold: number
+  maxThreshold: number
+  timestamp: number
+}
+
 export interface WebSocketMessage {
   type: string
   data?: AlarmPushMessage['data'] | DashboardPushData | Record<string, unknown>
@@ -66,7 +85,11 @@ function parseAlarmData(payload: unknown) {
 
   if (isObject(candidate.alarm)) {
     const alarm = pickNestedData(candidate.alarm)
-    if (isObject(alarm) && typeof alarm.alarmMsg === 'string' && typeof alarm.deviceCode === 'string') {
+    if (
+      isObject(alarm) &&
+      typeof alarm.alarmMsg === 'string' &&
+      typeof alarm.deviceCode === 'string'
+    ) {
       return alarm as unknown as AlarmPushMessage['data']
     }
   }
@@ -86,15 +109,52 @@ function parseAiAnalysisData(payload: unknown) {
   const candidate = pickNestedData(payload)
   if (!isObject(candidate)) return null
 
+  const normalizedType = String((candidate.type as string) || '').toLowerCase()
+
   if (
     typeof candidate.deviceCode === 'string' &&
     typeof candidate.riskLevel === 'string' &&
-    typeof candidate.finalDecision === 'string'
+    typeof candidate.finalDecision === 'string' &&
+    (typeof candidate.analysisTime === 'string' || typeof candidate.analysisTime === 'number')
+  ) {
+    return candidate as unknown as AiAnalysisPushData
+  }
+
+  if (
+    normalizedType === 'ai_comprehensive_analysis' &&
+    typeof candidate.deviceCode === 'string' &&
+    typeof candidate.riskLevel === 'string'
   ) {
     return candidate as unknown as AiAnalysisPushData
   }
 
   return null
+}
+
+function parseFastRiskData(payload: unknown) {
+  const candidate = pickNestedData(payload)
+  if (!isObject(candidate)) return null
+
+  if (typeof candidate.deviceCode !== 'string' || typeof candidate.riskLevel !== 'string') {
+    return null
+  }
+
+  return {
+    deviceCode: String(candidate.deviceCode),
+    batchNo: String(candidate.batchNo || ''),
+    processType: String(candidate.processType || ''),
+    currentValue: Number(candidate.currentValue || 0),
+    riskFast: Number(candidate.riskFast || 0),
+    riskLevel: String(candidate.riskLevel || 'LOW').toUpperCase(),
+    deviation: Number(candidate.deviation || 0),
+    slope: Number(candidate.slope || 0),
+    volatility: Number(candidate.volatility || 0),
+    etaSeconds: Number(candidate.etaSeconds ?? -1),
+    target: Number(candidate.target || 0),
+    minThreshold: Number(candidate.minThreshold || 0),
+    maxThreshold: Number(candidate.maxThreshold || 0),
+    timestamp: Number(candidate.timestamp || Date.now()),
+  } as FastRiskPushData
 }
 
 let ws: WebSocket | null = null
@@ -128,6 +188,22 @@ function emitAiAnalysisPush(data: AiAnalysisPushData) {
   )
 }
 
+function emitFastRiskPush(data: FastRiskPushData) {
+  alarmEventBus.dispatchEvent(
+    new CustomEvent(FAST_RISK_PUSH_EVENT, {
+      detail: data,
+    }),
+  )
+}
+
+function emitWsStatus(connected: boolean) {
+  alarmEventBus.dispatchEvent(
+    new CustomEvent(WS_STATUS_EVENT, {
+      detail: connected,
+    }),
+  )
+}
+
 function clearReconnectTimer() {
   if (reconnectTimer) {
     window.clearTimeout(reconnectTimer)
@@ -154,10 +230,14 @@ function connect() {
 
   ws.onopen = () => {
     console.log('报警 WebSocket 已连接')
+    emitWsStatus(true)
   }
 
   ws.onmessage = (event: MessageEvent<string>) => {
     try {
+      // If messages are flowing, the connection is alive even if the browser fired a transient error.
+      emitWsStatus(true)
+
       const message = JSON.parse(event.data) as WebSocketMessage
       const normalizedType = String(message.type || '').toLowerCase()
 
@@ -166,7 +246,11 @@ function connect() {
         return
       }
 
-      if (normalizedType === 'alarm' || normalizedType === 'alert' || normalizedType === 'warning') {
+      if (
+        normalizedType === 'alarm' ||
+        normalizedType === 'alert' ||
+        normalizedType === 'warning'
+      ) {
         const alarmData = parseAlarmData(message.data)
         if (!alarmData) return
         const alarm = normalizeAlarmPushData(alarmData)
@@ -185,7 +269,7 @@ function connect() {
       }
 
       if (normalizedType === 'dashboard') {
-        const dashboardData = parseDashboardData(message.data)
+        const dashboardData = parseDashboardData(message.data || message)
         if (!dashboardData) return
         emitDashboardPush({
           ...dashboardData,
@@ -194,7 +278,14 @@ function connect() {
         return
       }
 
-      if (normalizedType === 'ai_analysis') {
+      if (normalizedType === 'fast_risk') {
+        const fastRiskData = parseFastRiskData(message.data || message)
+        if (!fastRiskData) return
+        emitFastRiskPush(fastRiskData)
+        return
+      }
+
+      if (normalizedType === 'ai_analysis' || normalizedType === 'ai_comprehensive_analysis') {
         const aiData = parseAiAnalysisData(message.data || message)
         if (!aiData) return
         emitAiAnalysisPush(aiData)
@@ -211,6 +302,7 @@ function connect() {
   ws.onclose = () => {
     if (!started) return
     console.log('报警 WebSocket 已关闭，准备重连')
+    emitWsStatus(false)
     scheduleReconnect()
   }
 }
@@ -259,4 +351,24 @@ export function onAiAnalysisPush(listener: (data: AiAnalysisPushData) => void) {
 
   alarmEventBus.addEventListener(AI_ANALYSIS_PUSH_EVENT, handler)
   return () => alarmEventBus.removeEventListener(AI_ANALYSIS_PUSH_EVENT, handler)
+}
+
+export function onFastRiskPush(listener: (data: FastRiskPushData) => void) {
+  const handler = (event: Event) => {
+    const customEvent = event as CustomEvent<FastRiskPushData>
+    listener(customEvent.detail)
+  }
+
+  alarmEventBus.addEventListener(FAST_RISK_PUSH_EVENT, handler)
+  return () => alarmEventBus.removeEventListener(FAST_RISK_PUSH_EVENT, handler)
+}
+
+export function onAlarmWsStatusChange(listener: (connected: boolean) => void) {
+  const handler = (event: Event) => {
+    const customEvent = event as CustomEvent<boolean>
+    listener(Boolean(customEvent.detail))
+  }
+
+  alarmEventBus.addEventListener(WS_STATUS_EVENT, handler)
+  return () => alarmEventBus.removeEventListener(WS_STATUS_EVENT, handler)
 }

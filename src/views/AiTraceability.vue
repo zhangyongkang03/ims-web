@@ -154,7 +154,17 @@
           <el-col :xs="24" :xl="12">
             <el-card shadow="never" class="section-card full-height">
               <template #header>
-                <span>批次信息</span>
+                <div class="section-header-action">
+                  <span>批次信息</span>
+                  <el-button
+                    v-if="currentTraceBatchNo"
+                    link
+                    type="primary"
+                    @click="goBatchQuality(currentTraceBatchNo)"
+                  >
+                    查看质量报告
+                  </el-button>
+                </div>
               </template>
               <el-descriptions :column="2" border>
                 <el-descriptions-item label="批次号">{{
@@ -466,6 +476,13 @@
                   </el-table-column>
                   <el-table-column prop="startTime" label="开始时间" min-width="150" />
                   <el-table-column prop="endTime" label="结束时间" min-width="150" />
+                  <el-table-column label="操作" width="120" fixed="right">
+                    <template #default="{ row }">
+                      <el-button link type="primary" @click="goBatchQuality(row.batchNo)">
+                        质量报告
+                      </el-button>
+                    </template>
+                  </el-table-column>
                 </el-table>
                 <el-empty v-else description="暂无受影响批次" :image-size="80" />
               </el-card>
@@ -585,6 +602,8 @@ const affectedBatches = computed<TraceabilityAffectedBatch[]>(() => {
   return structuredTrace.value?.affectedBatches || []
 })
 
+const currentTraceBatchNo = computed(() => structuredTrace.value?.batchInfo?.batchNo || '')
+
 const filteredAiRiskRecords = computed<TraceabilityAiRiskRecord[]>(() => {
   return (structuredTrace.value?.aiRiskRecords || []).filter((item) => {
     const score = Number(item.riskScore)
@@ -684,6 +703,19 @@ const syncQuery = (direction: TraceDirection, keyword: string) => {
       direction === 'backward'
         ? { mode: direction, batchNo: keyword }
         : { mode: direction, lotNo: keyword },
+  })
+}
+
+const goBatchQuality = (batchNo: string) => {
+  const normalizedBatchNo = String(batchNo || '').trim()
+  if (!normalizedBatchNo) {
+    ElMessage.warning('当前批次号为空，无法查看质量报告')
+    return
+  }
+
+  router.push({
+    name: 'BatchQualityReport',
+    query: { batchNo: normalizedBatchNo },
   })
 }
 
@@ -885,6 +917,13 @@ onMounted(() => {
 .section-card,
 .sub-card {
   border-radius: 12px;
+}
+
+.section-header-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .summary-label {

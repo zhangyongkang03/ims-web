@@ -2,6 +2,11 @@ import type { AxiosInstance, AxiosRequestConfig } from 'axios'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
+export interface ApiRequestConfig extends AxiosRequestConfig {
+  skipErrorMessage?: boolean
+  skipErrorLog?: boolean
+}
+
 // API响应数据结构
 export interface ApiResponse<T = any> {
   code: number
@@ -64,7 +69,11 @@ service.interceptors.response.use(
     }
   },
   (error) => {
-    console.error('响应错误:', error)
+    const config = (error.config || {}) as ApiRequestConfig
+
+    if (!config.skipErrorLog) {
+      console.error('响应错误:', error)
+    }
 
     const status = error.response?.status
     const hasToken = Boolean(getValidToken())
@@ -93,29 +102,30 @@ service.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    ElMessage.error(error.message || '网络错误')
+    if (!config.skipErrorMessage) {
+      ElMessage.error(error.message || '网络错误')
+    }
     return Promise.reject(error)
   },
 )
 
 interface RequestInstance {
-  <T = any>(config: AxiosRequestConfig): Promise<T>
-  get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T>
-  post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T>
-  put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T>
-  delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T>
+  <T = any>(config: ApiRequestConfig): Promise<T>
+  get<T = any>(url: string, config?: ApiRequestConfig): Promise<T>
+  post<T = any>(url: string, data?: any, config?: ApiRequestConfig): Promise<T>
+  put<T = any>(url: string, data?: any, config?: ApiRequestConfig): Promise<T>
+  delete<T = any>(url: string, config?: ApiRequestConfig): Promise<T>
 }
 
-const request = (<T = any>(config: AxiosRequestConfig) =>
+const request = (<T = any>(config: ApiRequestConfig) =>
   service.request<any, T>(config)) as RequestInstance
 
-request.get = <T = any>(url: string, config?: AxiosRequestConfig) =>
-  service.get<any, T>(url, config)
-request.post = <T = any>(url: string, data?: any, config?: AxiosRequestConfig) =>
+request.get = <T = any>(url: string, config?: ApiRequestConfig) => service.get<any, T>(url, config)
+request.post = <T = any>(url: string, data?: any, config?: ApiRequestConfig) =>
   service.post<any, T>(url, data, config)
-request.put = <T = any>(url: string, data?: any, config?: AxiosRequestConfig) =>
+request.put = <T = any>(url: string, data?: any, config?: ApiRequestConfig) =>
   service.put<any, T>(url, data, config)
-request.delete = <T = any>(url: string, config?: AxiosRequestConfig) =>
+request.delete = <T = any>(url: string, config?: ApiRequestConfig) =>
   service.delete<any, T>(url, config)
 
 export default request

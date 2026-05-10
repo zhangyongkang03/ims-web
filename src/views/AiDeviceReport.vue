@@ -7,30 +7,30 @@
     >
       <template #header>
         <div class="card-header">
-          <span>设备运行日报 + AI 维保建议</span>
+          <span>设备运行报告 + AI 维保建议</span>
         </div>
       </template>
 
       <div class="toolbar">
+        <el-segmented v-model="reportType" :options="reportTypeOptions" class="type-switch" />
         <el-date-picker
           v-model="selectedDate"
           type="date"
           value-format="YYYY-MM-DD"
           format="YYYY-MM-DD"
-          placeholder="选择日报日期"
+          :placeholder="datePickerPlaceholder"
           :disabled-date="disabledDate"
           :clearable="false"
           class="date-picker"
         />
         <el-button type="primary" :loading="loading" @click="handleGenerateByDate">
-          生成指定日期日报
+          {{ generateButtonText }}
         </el-button>
-        <el-button :loading="loading" @click="handleGenerateToday">生成今日日报</el-button>
-        <el-button :loading="loading" @click="handleLoadLatest">读取最近缓存</el-button>
       </div>
 
       <div class="meta-row">
-        <el-tag type="info">报告日期：{{ report?.reportDate || '-' }}</el-tag>
+        <el-tag type="primary">周期：{{ reportTypeLabel }}</el-tag>
+        <el-tag type="info">报告日期：{{ reportDateText }}</el-tag>
         <el-tag type="success">生成时间：{{ report?.generateTime || '-' }}</el-tag>
       </div>
 
@@ -39,9 +39,9 @@
       <div v-else-if="report" class="content-wrap">
         <el-card shadow="never" class="section-card">
           <template #header>
-            <span>AI 产线全局日评</span>
+            <span>AI 产线全局评估</span>
           </template>
-          <div class="overview-text">{{ report.aiDailyOverview || '暂无AI总评' }}</div>
+          <div class="overview-text">{{ overviewText }}</div>
         </el-card>
 
         <el-card shadow="never" class="section-card">
@@ -52,6 +52,7 @@
             <el-table-column type="expand" width="40">
               <template #default="{ row }">
                 <el-table
+                  v-if="(row.sensorSummaries || []).length"
                   :data="row.sensorSummaries || []"
                   stripe
                   border
@@ -98,18 +99,53 @@
                     </template>
                   </el-table-column>
                 </el-table>
+                <el-table
+                  v-else-if="getTrendDetailRows(row).length"
+                  :data="getTrendDetailRows(row)"
+                  stripe
+                  border
+                  style="width: 100%"
+                  size="small"
+                >
+                  <el-table-column prop="date" label="日期" width="120" />
+                  <el-table-column label="健康评分" width="220">
+                    <template #default="{ row: item }">
+                      <div class="health-cell">
+                        <el-progress
+                          :percentage="normalizeScore(item.healthScore)"
+                          :stroke-width="14"
+                          :color="healthColor(item.healthScore)"
+                        />
+                        <span class="health-value">{{ formatNumber(item.healthScore, 1) }}</span>
+                      </div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="告警数" width="100">
+                    <template #default="{ row: item }">
+                      <span :class="{ 'danger-text': Number(item.alarmCount) > 0 }">{{
+                        item.alarmCount
+                      }}</span>
+                    </template>
+                  </el-table-column>
+                </el-table>
+                <el-empty v-else description="暂无设备明细" :image-size="80" />
               </template>
             </el-table-column>
             <el-table-column prop="equipCode" label="设备编码" width="140" />
             <el-table-column prop="equipName" label="设备名称" min-width="140" />
-            <el-table-column prop="processType" label="工序" width="130" />
-            <el-table-column label="传感器数" width="100">
+            <el-table-column label="工序" width="130">
+              <template #default="{ row }">{{ processTypeLabel(row.processType) }}</template>
+            </el-table-column>
+            <el-table-column v-if="showSensorCount" label="传感器数" width="100">
               <template #default="{ row }">{{ (row.sensorSummaries || []).length }}</template>
+            </el-table-column>
+            <el-table-column v-else label="周期点数" width="100">
+              <template #default="{ row }">{{ getTrendPointCount(row) }}</template>
             </el-table-column>
             <el-table-column label="告警数" width="90">
               <template #default="{ row }">
                 <span :class="{ 'danger-text': Number(row.alarmCount) > 0 }">{{
-                  row.alarmCount
+                  row.alarmCount ?? row.totalAlarmCount ?? 0
                 }}</span>
               </template>
             </el-table-column>
@@ -117,11 +153,13 @@
               <template #default="{ row }">
                 <div class="health-cell">
                   <el-progress
-                    :percentage="normalizeScore(row.healthScore)"
+                    :percentage="normalizeScore(row.healthScore ?? row.avgHealthScore)"
                     :stroke-width="14"
-                    :color="healthColor(row.healthScore)"
+                    :color="healthColor(row.healthScore ?? row.avgHealthScore)"
                   />
-                  <span class="health-value">{{ formatNumber(row.healthScore, 1) }}</span>
+                  <span class="health-value">{{
+                    formatNumber(row.healthScore ?? row.avgHealthScore, 1)
+                  }}</span>
                 </div>
               </template>
             </el-table-column>
@@ -176,7 +214,7 @@
               </template>
               <el-empty
                 v-if="!alarmTopDevices.length"
-                description="当日无明显告警"
+                :description="`${reportTypeLabel}无明显告警`"
                 :image-size="90"
               />
               <el-timeline v-else>
@@ -204,26 +242,71 @@
 <script setup lang="ts">
 import {
   getDeviceDailyReportByDate,
-  getLatestDeviceDailyReport,
-  getTodayDeviceDailyReport,
+  getDeviceMonthlyReportByDate,
+  getDeviceWeeklyReportByDate,
   type DeviceAlarmTopItem,
-  type DeviceDailyReport,
+  type DeviceDailyTrendPoint,
   type DeviceEquipmentSummary,
   type DeviceMaintenanceSuggestion,
+  type DeviceReport,
   type DeviceTrend,
   type DeviceUrgency,
 } from '@/api/ai'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+
+type ReportType = 'daily' | 'weekly' | 'monthly'
 
 const loading = ref(false)
-const report = ref<DeviceDailyReport | null>(null)
-const emptyTip = ref('暂无日报，请选择日期后生成')
+const report = ref<DeviceReport | null>(null)
+const emptyTip = ref('暂无报告，请选择日期后查询')
 const selectedDate = ref(getYesterday())
+const reportType = ref<ReportType>('daily')
+
+const reportTypeOptions = [
+  { label: '日报', value: 'daily' },
+  { label: '周报', value: 'weekly' },
+  { label: '月报', value: 'monthly' },
+]
+
+const reportTypeLabel = computed(() => {
+  if (reportType.value === 'weekly') return '周报'
+  if (reportType.value === 'monthly') return '月报'
+  return '日报'
+})
+
+const datePickerPlaceholder = computed(() => `选择${reportTypeLabel.value}日期`)
+
+const generateButtonText = computed(() => `查询指定日期${reportTypeLabel.value}`)
+
+const reportDateText = computed(() => {
+  if (!report.value) return '-'
+  if (report.value.reportDate) return report.value.reportDate
+  if (report.value.startDate && report.value.endDate) {
+    return `${report.value.startDate} 至 ${report.value.endDate}`
+  }
+  return report.value.startDate || report.value.endDate || '-'
+})
+
+const overviewText = computed(() => {
+  return report.value?.aiDailyOverview || report.value?.aiOverview || '暂无AI总评'
+})
+
+const showSensorCount = computed(() => {
+  return equipmentSummaries.value.some(
+    (item) => Array.isArray(item.sensorSummaries) && item.sensorSummaries.length,
+  )
+})
 
 const equipmentSummaries = computed<DeviceEquipmentSummary[]>(() => {
   const latest = report.value?.equipmentSummaries
-  if (Array.isArray(latest) && latest.length) return latest
+  if (Array.isArray(latest) && latest.length) {
+    return latest.map((item) => ({
+      ...item,
+      alarmCount: item.alarmCount ?? item.totalAlarmCount ?? 0,
+      healthScore: item.healthScore ?? item.avgHealthScore ?? 0,
+    }))
+  }
 
   const legacy = report.value?.deviceSummaries || []
   return legacy.map((item) => ({
@@ -303,6 +386,47 @@ function formatPercent(value: number | string) {
   return `${Number(value).toFixed(2)}%`
 }
 
+function processTypeLabel(processType?: string) {
+  const processTypeMap: Record<string, string> = {
+    MIXING: '配液',
+    STERILIZATION: '杀菌',
+    STERILIZING: '杀菌',
+    FILLING: '罐装',
+    SEALING: '封口',
+    LABELING: '贴标',
+    PACKAGING: '包装',
+  }
+  return processTypeMap[processType || ''] || processType || '-'
+}
+
+function getTrendPointCount(row: DeviceEquipmentSummary) {
+  return Math.max(row.dailyHealthTrend?.length || 0, row.dailyAlarmTrend?.length || 0)
+}
+
+function getTrendDetailRows(row: DeviceEquipmentSummary) {
+  const healthMap = new Map<string, number | string>()
+  const alarmMap = new Map<string, number | string>()
+
+  ;(row.dailyHealthTrend || []).forEach((item: DeviceDailyTrendPoint) => {
+    if (item.date) {
+      healthMap.set(item.date, item.healthScore ?? '-')
+    }
+  })
+  ;(row.dailyAlarmTrend || []).forEach((item: DeviceDailyTrendPoint) => {
+    if (item.date) {
+      alarmMap.set(item.date, item.alarmCount ?? 0)
+    }
+  })
+
+  return Array.from(new Set([...healthMap.keys(), ...alarmMap.keys()]))
+    .sort((left, right) => left.localeCompare(right))
+    .map((date) => ({
+      date,
+      healthScore: healthMap.get(date) ?? '-',
+      alarmCount: alarmMap.get(date) ?? 0,
+    }))
+}
+
 function outRateClass(value: number | string) {
   const rate = Number(value)
   if (Number.isNaN(rate)) return ''
@@ -313,13 +437,17 @@ function outRateClass(value: number | string) {
 
 function trendLabel(trend: DeviceTrend) {
   if (trend === 'UP') return '↑ 好转'
+  if (trend === 'IMPROVING') return '↑ 好转'
   if (trend === 'DOWN') return '↓ 下降'
+  if (trend === 'DECLINING') return '↓ 下降'
   return '→ 稳定'
 }
 
 function trendColor(trend: DeviceTrend) {
   if (trend === 'UP') return '#67c23a'
+  if (trend === 'IMPROVING') return '#67c23a'
   if (trend === 'DOWN') return '#f56c6c'
+  if (trend === 'DECLINING') return '#f56c6c'
   return '#909399'
 }
 
@@ -340,33 +468,18 @@ function errorMessage(error: unknown) {
   return '请求失败'
 }
 
-async function handleLoadLatest() {
-  loading.value = true
-  try {
-    const res = await getLatestDeviceDailyReport()
-    report.value = res.data
-    emptyTip.value = '暂无日报，请选择日期后生成'
-    ElMessage.success('已加载最近缓存日报')
-  } catch (error) {
-    report.value = null
-    const msg = errorMessage(error)
-    if (msg.includes('暂无缓存')) {
-      emptyTip.value = '暂无缓存的日报，请先生成'
-      return
-    }
-    ElMessage.error(msg)
-  } finally {
-    loading.value = false
-  }
-}
-
 async function handleGenerateByDate() {
   loading.value = true
   try {
-    const res = await getDeviceDailyReportByDate(selectedDate.value)
+    const res =
+      reportType.value === 'weekly'
+        ? await getDeviceWeeklyReportByDate(selectedDate.value)
+        : reportType.value === 'monthly'
+          ? await getDeviceMonthlyReportByDate(selectedDate.value)
+          : await getDeviceDailyReportByDate(selectedDate.value)
     report.value = res.data
-    emptyTip.value = '暂无日报，请选择日期后生成'
-    ElMessage.success('日报生成成功')
+    emptyTip.value = '暂无报告，请选择日期后查询'
+    ElMessage.success(`${reportTypeLabel.value}查询成功`)
   } catch (error) {
     ElMessage.error(errorMessage(error))
   } finally {
@@ -374,25 +487,9 @@ async function handleGenerateByDate() {
   }
 }
 
-async function handleGenerateToday() {
-  loading.value = true
-  try {
-    const res = await getTodayDeviceDailyReport()
-    report.value = res.data
-    if (res.data?.reportDate) {
-      selectedDate.value = res.data.reportDate
-    }
-    emptyTip.value = '暂无日报，请选择日期后生成'
-    ElMessage.success('今日日报生成成功')
-  } catch (error) {
-    ElMessage.error(errorMessage(error))
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(() => {
-  handleLoadLatest()
+watch([reportType, selectedDate], () => {
+  report.value = null
+  emptyTip.value = '暂无报告，请选择日期后查询'
 })
 </script>
 
@@ -402,6 +499,10 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.type-switch {
+  flex-shrink: 0;
 }
 
 .date-picker {

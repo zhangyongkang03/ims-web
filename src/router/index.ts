@@ -201,6 +201,11 @@ const router = createRouter({
           component: () => import('@/views/BatchQualityReport.vue'),
         },
         {
+          path: 'ai/production-report',
+          name: 'AiProductionReport',
+          component: () => import('@/views/AiProductionReport.vue'),
+        },
+        {
           path: 'ai/device-report',
           name: 'AiDeviceReport',
           component: () => import('@/views/AiDeviceReport.vue'),

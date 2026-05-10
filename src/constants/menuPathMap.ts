@@ -17,6 +17,7 @@ export const backendToFrontendPathMap: Record<string, string> = {
   '/ai/knowledge': '/ai/knowledge',
   '/ai/rules': '/ai/rules',
   '/ai/quality': '/ai/batch-quality',
+  '/ai/production-report': '/ai/production-report',
   '/ai/trace': '/ai/traceability',
   '/ai/daily-report': '/ai/device-report',
   '/equipment/list': '/equipment/equipment',

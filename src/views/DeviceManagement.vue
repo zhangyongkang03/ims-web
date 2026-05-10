@@ -120,8 +120,12 @@
             placeholder="请选择分析类别（可选）"
             clearable
           >
-            <el-option label="工艺环境（趋势预测）" value="PROCESS" />
-            <el-option label="逐瓶检测（设备精度评估）" value="PER_BOTTLE" />
+            <el-option
+              v-for="item in sensorCategoryOptions"
+              :key="item.id"
+              :label="item.dictLabel"
+              :value="item.dictValue"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="状态" prop="status">
@@ -148,6 +152,7 @@ import {
   type Device,
   type DeviceForm,
 } from '@/api/device'
+import { getDictDataList, type DictData } from '@/api/dict'
 import { getEquipmentList, type Equipment } from '@/api/equipment'
 import { getStationOptions, type Station } from '@/api/station'
 import type { FormInstance } from 'element-plus'
@@ -167,6 +172,7 @@ const formRef = ref<FormInstance>()
 const tableData = ref<Device[]>([])
 const stationList = ref<Station[]>([])
 const equipmentList = ref<Equipment[]>([])
+const sensorCategoryOptions = ref<DictData[]>([])
 const dialogTitle = ref('新增传感器')
 
 const pagination = reactive({ pageNum: 1, pageSize: 10, total: 0 })
@@ -187,14 +193,11 @@ const formData = reactive<DeviceDialogForm>({
   status: 1,
 })
 
-const sensorCategoryLabelMap: Record<'PROCESS' | 'PER_BOTTLE', string> = {
-  PROCESS: '工艺环境（趋势预测）',
-  PER_BOTTLE: '逐瓶检测（设备精度评估）',
-}
-
 const getSensorCategoryLabel = (sensorCategory?: 'PROCESS' | 'PER_BOTTLE' | null) => {
   if (!sensorCategory) return '—'
-  return sensorCategoryLabelMap[sensorCategory] || '—'
+  return (
+    sensorCategoryOptions.value.find((item) => item.dictValue === sensorCategory)?.dictLabel || '—'
+  )
 }
 
 const rules = {
@@ -234,6 +237,11 @@ const loadStationList = async () => {
 const loadEquipmentList = async () => {
   const res = await getEquipmentList({ pageSize: 1000 })
   equipmentList.value = res.data.records
+}
+
+const loadSensorCategoryOptions = async () => {
+  const res = await getDictDataList('device_type')
+  sensorCategoryOptions.value = (res.data || []).filter((item) => item.status)
 }
 
 const handleSearch = () => {
@@ -333,6 +341,7 @@ onMounted(() => {
   getList()
   loadStationList()
   loadEquipmentList()
+  loadSensorCategoryOptions()
 })
 </script>
 

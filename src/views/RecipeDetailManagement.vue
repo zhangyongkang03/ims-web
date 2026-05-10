@@ -12,6 +12,13 @@
       <!-- 数据表格 -->
       <el-table :data="tableData" stripe style="width: 100%" v-loading="loading">
         <el-table-column prop="mname" label="物料名称" width="200" />
+        <el-table-column prop="phaseLabel" label="所属阶段" width="140">
+          <template #default="scope">
+            <el-tag :type="scope.row.phase === 1 ? 'warning' : 'success'">
+              {{ getPhaseLabel(scope.row.phase, scope.row.phaseLabel) }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="standardQty" label="标准数量" width="120" />
         <el-table-column prop="unit" label="单位" width="100">
           <template #default="scope">
@@ -57,6 +64,12 @@
           <el-select v-model="formData.mId" placeholder="选择物料" @change="handleMaterialChange">
             <el-option v-for="m in materialList" :key="m.mid" :label="m.mname" :value="m.mid" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="所属阶段" prop="phase">
+          <el-radio-group v-model="formData.phase">
+            <el-radio :value="1">配液阶段</el-radio>
+            <el-radio :value="2">罐装阶段</el-radio>
+          </el-radio-group>
         </el-form-item>
         <el-form-item label="标准数量" prop="standardQty">
           <el-input-number v-model="formData.standardQty" :min="0" />
@@ -129,6 +142,7 @@ const pagination = reactive({
 const formData = reactive<RecipeDetailForm>({
   recipeId: recipeId,
   mId: 0,
+  phase: 1,
   standardQty: 0,
   unit: '',
   inputUnit: '',
@@ -136,11 +150,17 @@ const formData = reactive<RecipeDetailForm>({
 
 const rules = {
   mId: [{ required: true, message: '物料不能为空' }],
+  phase: [{ required: true, message: '所属阶段不能为空' }],
   standardQty: [{ required: true, message: '标准数量不能为空' }],
   inputUnit: [{ required: true, message: '单位不能为空' }],
 }
 
 const dialogTitle = ref('新增明细')
+
+const getPhaseLabel = (phase?: number, phaseLabel?: string) => {
+  if (phaseLabel) return phaseLabel
+  return phase === 2 ? '罐装阶段' : '配液阶段'
+}
 
 const findMaterialById = (materialId?: number) =>
   materialList.value.find((item) => item.mid === materialId)
@@ -219,6 +239,7 @@ const openDialog = (type: 'add' | 'edit') => {
   if (type === 'add') {
     compatibleUnitOptions.value = []
     formData.mId = 0
+    formData.phase = 1
     formData.standardQty = 0
     formData.unit = ''
     formData.inputUnit = ''
@@ -233,6 +254,7 @@ const handleEdit = async (row: RecipeDetail) => {
 
   formData.detailId = row.detailId
   formData.mId = row.mid
+  formData.phase = row.phase ?? 1
   formData.standardQty = row.standardQty
   formData.unit = row.unit
   await loadCompatibleUnitOptions(row.mid, row.inputUnit || row.unit)

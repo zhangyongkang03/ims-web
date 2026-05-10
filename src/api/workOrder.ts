@@ -9,6 +9,10 @@ export interface Consumption {
   lotNo: string
   mId: number
   mName: string
+  mCode?: string
+  mid?: number | string
+  mname?: string
+  mcode?: string
   consumeQty: number
   uom: string
   feedTime: string
@@ -30,7 +34,6 @@ export interface Batch {
   batchStatusLabel: string
   startTime: string
   endTime?: string
-  consumptionList: Consumption[]
 }
 
 /** 工单列表项 */
@@ -49,12 +52,15 @@ export interface WorkOrder {
   statusLabel: string
   plannedStart?: string
   plannedEnd?: string
+  mixingStartTime?: string
+  mixingEndTime?: string
   createTime: string
-  batchCount: number
+  batchCount?: number
 }
 
 /** 工单详情（含批次列表） */
 export interface WorkOrderDetail extends WorkOrder {
+  mixingConsumptionList: Consumption[]
   batchList: Batch[]
 }
 
@@ -63,7 +69,6 @@ export interface WorkOrderForm {
   woId?: string
   pId?: number
   customerId?: number
-  recipeId?: number
   targetQty: number
   plannedStart?: string
   plannedEnd?: string
@@ -113,12 +118,22 @@ export function closeWorkOrder(woId: string | number) {
   return request.post<ApiResponse>(`/work-orders/${woId}/close`)
 }
 
-/** 启动新批次 */
-export function startBatch(
+/** 开始配液 */
+export function startMixing(woId: string | number) {
+  return request.post<ApiResponse>(`/work-orders/${woId}/start-mixing`)
+}
+
+/** 完成配液 */
+export function completeMixing(woId: string | number) {
+  return request.post<ApiResponse>(`/work-orders/${woId}/complete-mixing`)
+}
+
+/** 启动罐装批次 */
+export function startFilling(
   woId: string | number,
-  params: { batchTargetQty: number; operatorId?: number },
+  params: { batchTargetQty?: number; operatorId?: number },
 ) {
-  return request.post<ApiResponse<string>>(`/work-orders/${woId}/start-batch`, null, { params })
+  return request.post<ApiResponse<string>>(`/work-orders/${woId}/start-filling`, null, { params })
 }
 
 /** 批次报工 */
