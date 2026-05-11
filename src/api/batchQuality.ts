@@ -133,6 +133,29 @@ export interface BatchTimeSeriesPoint {
   batchNo?: string
 }
 
+export interface DefectRootCauseFactor {
+  factorType?: string
+  factorName?: string
+  deviationScore?: number
+  description?: string
+  relatedItems?: string[]
+}
+
+export interface DefectRootCauseReport {
+  batchNo?: string
+  woNo?: string
+  productName?: string
+  badQty?: number
+  actualQty?: number
+  yieldRate?: number
+  primaryCause?: string
+  confidence?: number
+  factors?: DefectRootCauseFactor[]
+  aiAnalysis?: string
+  aiSuggestion?: string
+  generateTime?: string
+}
+
 export function getBatchQualityReport(batchNo: string) {
   return request.get<ApiResponse<BatchQualityReportRaw | BatchQualityReport>>(
     `/batch-quality/report/${batchNo}`,
@@ -144,6 +167,12 @@ export function getBatchQualityTimeSeries(batchNo: string, device: string) {
   return request.get<ApiResponse<BatchTimeSeriesPoint[]>>(
     `/batch-quality/timeseries/${batchNo}/${device}`,
   )
+}
+
+export function getDefectRootCause(batchNo: string) {
+  return request.get<ApiResponse<DefectRootCauseReport>>('/defect-root-cause', {
+    params: { batchNo },
+  })
 }
 
 export function clearBatchQualityCache(batchNo: string) {

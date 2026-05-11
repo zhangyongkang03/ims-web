@@ -191,6 +191,36 @@ export interface DeviceMaintenanceSuggestion {
   reason: string
 }
 
+export type FailureTrend = 'DETERIORATING' | 'STABLE' | 'IMPROVING' | string
+export type FailureRiskLevel = 'HIGH' | 'MEDIUM' | 'LOW' | string
+
+export interface FailurePredictionItem {
+  deviceCode: string
+  deviceType?: string
+  equipCode?: string
+  equipName?: string
+  trend?: FailureTrend
+  riskScoreTrend?: number[]
+  alarmCountTrend?: number[]
+  thisWeekAlarms?: number
+  lastWeekAlarms?: number
+  alarmGrowthRate?: number
+  daysSinceLastRepair?: number
+  lastRepairDate?: string
+  predictedRiskLevel?: FailureRiskLevel
+  aiRecommendation?: string
+  urgency?: DeviceUrgency | FailureRiskLevel
+}
+
+export interface FailurePredictionReport {
+  predictionDate?: string
+  generateTime?: string
+  totalDevices?: number
+  warningDevices?: number
+  predictions: FailurePredictionItem[]
+  aiOverview?: string
+}
+
 export interface DeviceDailyReport {
   reportType?: 'DAILY' | 'WEEKLY' | 'MONTHLY'
   reportDate?: string
@@ -315,6 +345,12 @@ export function saveAiModelConfig(data: AiModelConfigForm) {
 
 export function activateAiModelConfig(configId: number) {
   return request.post<ApiResponse<null>>(`/ai/model-configs/${configId}/activate`)
+}
+
+export function getFailurePrediction(date?: string) {
+  return request.get<ApiResponse<FailurePredictionReport>>('/failure-prediction', {
+    params: date ? { date } : undefined,
+  })
 }
 
 export function chatWithAi(data: AiChatRequest) {

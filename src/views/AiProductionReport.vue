@@ -27,48 +27,191 @@
       <div class="meta-row">
         <el-tag type="primary">周期：{{ reportTypeLabel }}</el-tag>
         <el-tag type="info">报告日期：{{ reportDateText }}</el-tag>
-        <el-tag type="success">生成时间：{{ report?.generateTime || '-' }}</el-tag>
+        <el-tag type="success">生成时间：{{ activeGenerateTime }}</el-tag>
       </div>
 
-      <el-empty v-if="!report && !loading" :description="emptyTip" />
+      <el-empty v-if="!report && !oeeReport && !loading" :description="emptyTip" />
 
-      <div v-else-if="report" class="content-wrap">
-        <el-row :gutter="12" class="summary-grid">
-          <el-col :xs="12" :md="8" :xl="3">
-            <el-statistic title="计划产量" :value="numberOrZero(overview.totalTargetQty)" />
-          </el-col>
-          <el-col :xs="12" :md="8" :xl="3">
-            <el-statistic title="实际产量" :value="numberOrZero(overview.totalOutput)" />
-          </el-col>
-          <el-col :xs="12" :md="8" :xl="3">
-            <el-statistic title="良品产量" :value="numberOrZero(overview.qualifiedOutput)" />
-          </el-col>
-          <el-col :xs="12" :md="8" :xl="3">
-            <el-statistic title="不良数量" :value="numberOrZero(overview.badQty)" />
-          </el-col>
-          <el-col :xs="12" :md="8" :xl="3">
-            <el-statistic
-              title="良率"
-              :value="numberOrZero(percentValue(overview.qualificationRate))"
-              suffix="%"
-            />
-          </el-col>
-          <el-col :xs="12" :md="8" :xl="3">
-            <el-statistic title="批次数" :value="numberOrZero(overview.batchCount)" />
-          </el-col>
-          <el-col :xs="12" :md="8" :xl="3">
-            <el-statistic title="工单数" :value="numberOrZero(overview.workOrderCount)" />
-          </el-col>
-        </el-row>
+      <el-tabs v-else v-model="activeTab">
+        <el-tab-pane label="生产报告" name="production">
+          <div v-if="report" class="content-wrap">
+            <el-row :gutter="12" class="summary-grid">
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic title="计划产量" :value="numberOrZero(overview.totalTargetQty)" />
+              </el-col>
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic title="实际产量" :value="numberOrZero(overview.totalOutput)" />
+              </el-col>
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic title="良品产量" :value="numberOrZero(overview.qualifiedOutput)" />
+              </el-col>
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic title="不良数量" :value="numberOrZero(overview.badQty)" />
+              </el-col>
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic
+                  title="良率"
+                  :value="numberOrZero(percentValue(overview.qualificationRate))"
+                  suffix="%"
+                />
+              </el-col>
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic title="批次数" :value="numberOrZero(overview.batchCount)" />
+              </el-col>
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic title="工单数" :value="numberOrZero(overview.workOrderCount)" />
+              </el-col>
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic
+                  title="OEE"
+                  :value="numberOrZero(percentValue(overview.oeeOverall))"
+                  suffix="%"
+                />
+              </el-col>
+            </el-row>
 
-        <el-row :gutter="12" class="section-row">
-          <el-col :xs="24" :xl="14">
-            <el-card shadow="never" class="section-card full-height">
+            <el-row :gutter="12" class="section-row">
+              <el-col :xs="24" :xl="14">
+                <el-card shadow="never" class="section-card full-height">
+                  <template #header>
+                    <span>产品维度分解</span>
+                  </template>
+                  <el-table :data="productStats" stripe border style="width: 100%" max-height="420">
+                    <el-table-column prop="productCode" label="产品编码" min-width="120" />
+                    <el-table-column prop="productName" label="产品名称" min-width="140" />
+                    <el-table-column label="计划产量" width="100">
+                      <template #default="{ row }">{{ formatNumber(row.targetQty) }}</template>
+                    </el-table-column>
+                    <el-table-column label="实际产量" width="100">
+                      <template #default="{ row }">{{ formatNumber(row.actualQty) }}</template>
+                    </el-table-column>
+                    <el-table-column label="良品" width="100">
+                      <template #default="{ row }">{{ formatNumber(row.qualifiedQty) }}</template>
+                    </el-table-column>
+                    <el-table-column label="不良品" width="100">
+                      <template #default="{ row }">{{ formatNumber(row.badQty) }}</template>
+                    </el-table-column>
+                    <el-table-column label="良率" width="100">
+                      <template #default="{ row }">{{
+                        formatPercent(row.qualificationRate)
+                      }}</template>
+                    </el-table-column>
+                  </el-table>
+                </el-card>
+              </el-col>
+
+              <el-col :xs="24" :xl="10">
+                <el-card shadow="never" class="section-card full-height">
+                  <template #header>
+                    <span>不良品工序分布</span>
+                  </template>
+                  <el-empty
+                    v-if="!defectDistribution.length"
+                    description="暂无不良品工序分布"
+                    :image-size="80"
+                  />
+                  <el-table
+                    v-else
+                    :data="defectDistribution"
+                    stripe
+                    border
+                    style="width: 100%"
+                    max-height="420"
+                  >
+                    <el-table-column label="工序名称" min-width="120">
+                      <template #default="{ row }">{{
+                        row.processName || processTypeLabel(row.processType)
+                      }}</template>
+                    </el-table-column>
+                    <el-table-column prop="processType" label="工序类型" min-width="120" />
+                    <el-table-column label="不良数量" width="100">
+                      <template #default="{ row }">{{ formatNumber(row.badQty) }}</template>
+                    </el-table-column>
+                    <el-table-column label="不良率" width="100">
+                      <template #default="{ row }">{{ formatPercent(row.defectRate) }}</template>
+                    </el-table-column>
+                  </el-table>
+                </el-card>
+              </el-col>
+            </el-row>
+
+            <el-row :gutter="12" class="section-row">
+              <el-col :xs="24" :xl="12">
+                <el-card shadow="never" class="section-card full-height">
+                  <template #header>
+                    <span>日趋势曲线数据</span>
+                  </template>
+                  <el-empty v-if="!dailyTrend.length" description="暂无趋势数据" :image-size="80" />
+                  <el-table
+                    v-else
+                    :data="dailyTrend"
+                    stripe
+                    border
+                    style="width: 100%"
+                    max-height="420"
+                  >
+                    <el-table-column prop="label" label="日期" min-width="120">
+                      <template #default="{ row }">{{ row.label || row.date || '-' }}</template>
+                    </el-table-column>
+                    <el-table-column label="总产量" width="110">
+                      <template #default="{ row }">{{ formatNumber(row.totalOutput) }}</template>
+                    </el-table-column>
+                    <el-table-column label="良品产量" width="110">
+                      <template #default="{ row }">{{
+                        formatNumber(row.qualifiedOutput)
+                      }}</template>
+                    </el-table-column>
+                    <el-table-column label="不良数量" width="110">
+                      <template #default="{ row }">{{ formatNumber(row.badQty) }}</template>
+                    </el-table-column>
+                    <el-table-column label="批次数" width="100">
+                      <template #default="{ row }">{{ formatNumber(row.batchCount) }}</template>
+                    </el-table-column>
+                    <el-table-column label="良率" width="100">
+                      <template #default="{ row }">{{
+                        formatPercent(row.qualificationRate)
+                      }}</template>
+                    </el-table-column>
+                  </el-table>
+                </el-card>
+              </el-col>
+
+              <el-col :xs="24" :xl="12">
+                <el-card shadow="never" class="section-card full-height">
+                  <template #header>
+                    <span>AI 总结与改善建议</span>
+                  </template>
+                  <el-descriptions :column="1" border>
+                    <el-descriptions-item label="AI 总结">
+                      {{ aiSummary.summary || '-' }}
+                    </el-descriptions-item>
+                    <el-descriptions-item label="改善建议">
+                      {{ aiSummary.improvementSuggestion || '-' }}
+                    </el-descriptions-item>
+                  </el-descriptions>
+                </el-card>
+              </el-col>
+            </el-row>
+
+            <el-card shadow="never" class="section-card">
               <template #header>
-                <span>产品维度分解</span>
+                <span>批次明细</span>
               </template>
-              <el-table :data="productStats" stripe border style="width: 100%" max-height="420">
-                <el-table-column prop="productCode" label="产品编码" min-width="120" />
+              <el-table :data="batchDetails" stripe border style="width: 100%" max-height="480">
+                <el-table-column label="批次号" min-width="170">
+                  <template #default="{ row }">
+                    <el-button
+                      v-if="row.batchNo"
+                      link
+                      type="primary"
+                      @click="goBatchQuality(row.batchNo)"
+                    >
+                      {{ row.batchNo }}
+                    </el-button>
+                    <span v-else>-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="woNo" label="工单号" min-width="150" />
                 <el-table-column prop="productName" label="产品名称" min-width="140" />
                 <el-table-column label="计划产量" width="100">
                   <template #default="{ row }">{{ formatNumber(row.targetQty) }}</template>
@@ -76,152 +219,177 @@
                 <el-table-column label="实际产量" width="100">
                   <template #default="{ row }">{{ formatNumber(row.actualQty) }}</template>
                 </el-table-column>
-                <el-table-column label="良品" width="100">
-                  <template #default="{ row }">{{ formatNumber(row.qualifiedQty) }}</template>
-                </el-table-column>
                 <el-table-column label="不良品" width="100">
                   <template #default="{ row }">{{ formatNumber(row.badQty) }}</template>
                 </el-table-column>
                 <el-table-column label="良率" width="100">
                   <template #default="{ row }">{{ formatPercent(row.qualificationRate) }}</template>
                 </el-table-column>
+                <el-table-column prop="startTime" label="开始时间" min-width="150" />
+                <el-table-column prop="endTime" label="结束时间" min-width="150" />
               </el-table>
             </el-card>
-          </el-col>
+          </div>
+          <el-empty v-else :description="emptyTip" />
+        </el-tab-pane>
 
-          <el-col :xs="24" :xl="10">
-            <el-card shadow="never" class="section-card full-height">
+        <el-tab-pane label="OEE 报告" name="oee">
+          <div v-if="oeeReport" class="content-wrap">
+            <el-row :gutter="12" class="summary-grid">
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic
+                  title="可用率"
+                  :value="numberOrZero(oeePercent(oeeReport.availability))"
+                  suffix="%"
+                />
+              </el-col>
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic
+                  title="性能率"
+                  :value="numberOrZero(oeePercent(oeeReport.performance))"
+                  suffix="%"
+                />
+              </el-col>
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic
+                  title="良品率"
+                  :value="numberOrZero(oeePercent(oeeReport.quality))"
+                  suffix="%"
+                />
+              </el-col>
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic
+                  title="综合OEE"
+                  :value="numberOrZero(oeePercent(oeeReport.oee))"
+                  suffix="%"
+                />
+              </el-col>
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic
+                  title="计划时长(min)"
+                  :value="numberOrZero(oeeReport.plannedMinutes)"
+                />
+              </el-col>
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic
+                  title="实际运行(min)"
+                  :value="numberOrZero(oeeReport.actualMinutes)"
+                />
+              </el-col>
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic title="理论产量" :value="numberOrZero(oeeReport.theoreticalOutput)" />
+              </el-col>
+              <el-col :xs="12" :md="8" :xl="3">
+                <el-statistic title="批次数" :value="numberOrZero(oeeReport.batchCount)" />
+              </el-col>
+            </el-row>
+
+            <el-row :gutter="12" class="section-row">
+              <el-col :xs="24" :xl="12">
+                <el-card shadow="never" class="section-card full-height">
+                  <template #header>
+                    <span>OEE 趋势</span>
+                  </template>
+                  <el-empty
+                    v-if="!oeeDailyTrends.length"
+                    description="暂无 OEE 趋势数据"
+                    :image-size="80"
+                  />
+                  <el-table
+                    v-else
+                    :data="oeeDailyTrends"
+                    stripe
+                    border
+                    style="width: 100%"
+                    max-height="420"
+                  >
+                    <el-table-column prop="date" label="日期" min-width="120" />
+                    <el-table-column label="可用率" width="100">
+                      <template #default="{ row }">{{ formatPercent(row.availability) }}</template>
+                    </el-table-column>
+                    <el-table-column label="性能率" width="100">
+                      <template #default="{ row }">{{ formatPercent(row.performance) }}</template>
+                    </el-table-column>
+                    <el-table-column label="良品率" width="100">
+                      <template #default="{ row }">{{ formatPercent(row.quality) }}</template>
+                    </el-table-column>
+                    <el-table-column label="OEE" width="100">
+                      <template #default="{ row }">{{ formatPercent(row.oee) }}</template>
+                    </el-table-column>
+                    <el-table-column label="批次数" width="90">
+                      <template #default="{ row }">{{ formatNumber(row.batchCount) }}</template>
+                    </el-table-column>
+                  </el-table>
+                </el-card>
+              </el-col>
+
+              <el-col :xs="24" :xl="12">
+                <el-card shadow="never" class="section-card full-height">
+                  <template #header>
+                    <span>OEE AI 总结</span>
+                  </template>
+                  <el-descriptions :column="1" border>
+                    <el-descriptions-item label="AI 总结">
+                      {{ oeeReport.aiSummary || '-' }}
+                    </el-descriptions-item>
+                    <el-descriptions-item label="产量概况">
+                      实际产量 {{ formatNumber(oeeReport.actualOutput) }}，良品
+                      {{ formatNumber(oeeReport.goodQty) }}，不良
+                      {{ formatNumber(oeeReport.badQty) }}
+                    </el-descriptions-item>
+                  </el-descriptions>
+                </el-card>
+              </el-col>
+            </el-row>
+
+            <el-card shadow="never" class="section-card">
               <template #header>
-                <span>不良品工序分布</span>
+                <span>批次 OEE 明细</span>
               </template>
-              <el-empty
-                v-if="!defectDistribution.length"
-                description="暂无不良品工序分布"
-                :image-size="80"
-              />
-              <el-table
-                v-else
-                :data="defectDistribution"
-                stripe
-                border
-                style="width: 100%"
-                max-height="420"
-              >
-                <el-table-column label="工序名称" min-width="120">
-                  <template #default="{ row }">{{
-                    row.processName || processTypeLabel(row.processType)
-                  }}</template>
+              <el-table :data="oeeBatchDetails" stripe border style="width: 100%" max-height="480">
+                <el-table-column prop="batchNo" label="批次号" min-width="170" />
+                <el-table-column prop="productName" label="产品名称" min-width="140" />
+                <el-table-column label="可用率" width="100">
+                  <template #default="{ row }">{{ formatPercent(row.availability) }}</template>
                 </el-table-column>
-                <el-table-column prop="processType" label="工序类型" min-width="120" />
-                <el-table-column label="不良数量" width="100">
-                  <template #default="{ row }">{{ formatNumber(row.badQty) }}</template>
+                <el-table-column label="性能率" width="100">
+                  <template #default="{ row }">{{ formatPercent(row.performance) }}</template>
                 </el-table-column>
-                <el-table-column label="不良率" width="100">
-                  <template #default="{ row }">{{ formatPercent(row.defectRate) }}</template>
+                <el-table-column label="良品率" width="100">
+                  <template #default="{ row }">{{ formatPercent(row.quality) }}</template>
                 </el-table-column>
+                <el-table-column label="OEE" width="100">
+                  <template #default="{ row }">{{ formatPercent(row.oee) }}</template>
+                </el-table-column>
+                <el-table-column label="产量" width="100">
+                  <template #default="{ row }">{{ formatNumber(row.actualQty) }}</template>
+                </el-table-column>
+                <el-table-column label="良品" width="100">
+                  <template #default="{ row }">{{ formatNumber(row.goodQty) }}</template>
+                </el-table-column>
+                <el-table-column label="运行时长" width="100">
+                  <template #default="{ row }">{{ formatNumber(row.runMinutes) }}</template>
+                </el-table-column>
+                <el-table-column prop="startTime" label="开始时间" min-width="150" />
+                <el-table-column prop="endTime" label="结束时间" min-width="150" />
               </el-table>
             </el-card>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="12" class="section-row">
-          <el-col :xs="24" :xl="12">
-            <el-card shadow="never" class="section-card full-height">
-              <template #header>
-                <span>日趋势曲线数据</span>
-              </template>
-              <el-empty v-if="!dailyTrend.length" description="暂无趋势数据" :image-size="80" />
-              <el-table
-                v-else
-                :data="dailyTrend"
-                stripe
-                border
-                style="width: 100%"
-                max-height="420"
-              >
-                <el-table-column prop="label" label="日期" min-width="120">
-                  <template #default="{ row }">{{ row.label || row.date || '-' }}</template>
-                </el-table-column>
-                <el-table-column label="总产量" width="110">
-                  <template #default="{ row }">{{ formatNumber(row.totalOutput) }}</template>
-                </el-table-column>
-                <el-table-column label="良品产量" width="110">
-                  <template #default="{ row }">{{ formatNumber(row.qualifiedOutput) }}</template>
-                </el-table-column>
-                <el-table-column label="不良数量" width="110">
-                  <template #default="{ row }">{{ formatNumber(row.badQty) }}</template>
-                </el-table-column>
-                <el-table-column label="批次数" width="100">
-                  <template #default="{ row }">{{ formatNumber(row.batchCount) }}</template>
-                </el-table-column>
-                <el-table-column label="良率" width="100">
-                  <template #default="{ row }">{{ formatPercent(row.qualificationRate) }}</template>
-                </el-table-column>
-              </el-table>
-            </el-card>
-          </el-col>
-
-          <el-col :xs="24" :xl="12">
-            <el-card shadow="never" class="section-card full-height">
-              <template #header>
-                <span>AI 总结与改善建议</span>
-              </template>
-              <el-descriptions :column="1" border>
-                <el-descriptions-item label="AI 总结">
-                  {{ aiSummary.summary || '-' }}
-                </el-descriptions-item>
-                <el-descriptions-item label="改善建议">
-                  {{ aiSummary.improvementSuggestion || '-' }}
-                </el-descriptions-item>
-              </el-descriptions>
-            </el-card>
-          </el-col>
-        </el-row>
-
-        <el-card shadow="never" class="section-card">
-          <template #header>
-            <span>批次明细</span>
-          </template>
-          <el-table :data="batchDetails" stripe border style="width: 100%" max-height="480">
-            <el-table-column label="批次号" min-width="170">
-              <template #default="{ row }">
-                <el-button
-                  v-if="row.batchNo"
-                  link
-                  type="primary"
-                  @click="goBatchQuality(row.batchNo)"
-                >
-                  {{ row.batchNo }}
-                </el-button>
-                <span v-else>-</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="woNo" label="工单号" min-width="150" />
-            <el-table-column prop="productName" label="产品名称" min-width="140" />
-            <el-table-column label="计划产量" width="100">
-              <template #default="{ row }">{{ formatNumber(row.targetQty) }}</template>
-            </el-table-column>
-            <el-table-column label="实际产量" width="100">
-              <template #default="{ row }">{{ formatNumber(row.actualQty) }}</template>
-            </el-table-column>
-            <el-table-column label="不良品" width="100">
-              <template #default="{ row }">{{ formatNumber(row.badQty) }}</template>
-            </el-table-column>
-            <el-table-column label="良率" width="100">
-              <template #default="{ row }">{{ formatPercent(row.qualificationRate) }}</template>
-            </el-table-column>
-            <el-table-column prop="startTime" label="开始时间" min-width="150" />
-            <el-table-column prop="endTime" label="结束时间" min-width="150" />
-          </el-table>
-        </el-card>
-      </div>
+          </div>
+          <el-empty v-else description="暂无 OEE 报告" />
+        </el-tab-pane>
+      </el-tabs>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
 import {
+  getOeeReport,
   getProductionReport,
+  type OeeBatchDetailItem,
+  type OeeReport,
+  type OeeReportRaw,
+  type OeeTrendItem,
   type ProductionAiSummary,
   type ProductionBatchDetailItem,
   type ProductionDefectItem,
@@ -242,9 +410,11 @@ type ReportType = 'daily' | 'weekly' | 'monthly'
 
 const loading = ref(false)
 const report = ref<ProductionReport | null>(null)
+const oeeReport = ref<OeeReport | null>(null)
 const emptyTip = ref('暂无生产报告，请选择日期后查询')
 const selectedDate = ref(getYesterday())
 const reportType = ref<ReportType>('daily')
+const activeTab = ref<'production' | 'oee'>('production')
 
 const reportTypeOptions = [
   { label: '日报', value: 'daily' },
@@ -261,13 +431,18 @@ const reportTypeLabel = computed(() => {
 const datePickerPlaceholder = computed(() => `选择${reportTypeLabel.value}日期`)
 const loadButtonText = computed(() => `查询${reportTypeLabel.value}`)
 const reportDateText = computed(() => {
-  if (!report.value) return '-'
-  if (report.value.reportDate) return report.value.reportDate
-  if (report.value.startDate && report.value.endDate) {
-    return `${report.value.startDate} 至 ${report.value.endDate}`
+  const source = report.value || oeeReport.value
+  if (!source) return '-'
+  if ('reportDate' in source && source.reportDate) return source.reportDate
+  if (source.startDate && source.endDate) {
+    return `${source.startDate} 至 ${source.endDate}`
   }
-  return report.value.startDate || report.value.endDate || '-'
+  return source.startDate || source.endDate || '-'
 })
+
+const activeGenerateTime = computed(
+  () => report.value?.generateTime || oeeReport.value?.generateTime || '-',
+)
 
 const overview = computed<ProductionOverview>(() => report.value?.overview || {})
 const productStats = computed<ProductionProductItem[]>(() => report.value?.productStats || [])
@@ -277,6 +452,8 @@ const defectDistribution = computed<ProductionDefectItem[]>(
 const dailyTrend = computed<ProductionTrendItem[]>(() => report.value?.dailyTrend || [])
 const batchDetails = computed<ProductionBatchDetailItem[]>(() => report.value?.batchDetails || [])
 const aiSummary = computed<ProductionAiSummary>(() => report.value?.aiSummary || {})
+const oeeDailyTrends = computed<OeeTrendItem[]>(() => oeeReport.value?.dailyTrends || [])
+const oeeBatchDetails = computed<OeeBatchDetailItem[]>(() => oeeReport.value?.batchDetails || [])
 
 function getYesterday() {
   const date = new Date()
@@ -342,6 +519,10 @@ function percentValue(value: unknown) {
   return num > 1 ? num : num * 100
 }
 
+function oeePercent(value: unknown) {
+  return percentValue(value)
+}
+
 function numberOrZero(value: unknown) {
   return toNumber(value) ?? 0
 }
@@ -391,6 +572,69 @@ function sanitizeOverview(raw: ProductionReportRaw | ProductionReport): Producti
     badRate: percentValue(row.badRate),
     batchCount: toNumber(row.batchCount),
     workOrderCount: toNumber(row.workOrderCount),
+    oeeAvailability: percentValue(row.oeeAvailability),
+    oeePerformance: percentValue(row.oeePerformance),
+    oeeQuality: percentValue(row.oeeQuality),
+    oeeOverall: percentValue(row.oeeOverall),
+  }
+}
+
+function sanitizeOeeTrend(source: unknown): OeeTrendItem[] {
+  if (!Array.isArray(source)) return []
+  return source.map((item) => {
+    const row = item as Record<string, unknown>
+    return {
+      date: String(row.date || ''),
+      availability: percentValue(row.availability),
+      performance: percentValue(row.performance),
+      quality: percentValue(row.quality),
+      oee: percentValue(row.oee),
+      batchCount: toNumber(row.batchCount),
+    }
+  })
+}
+
+function sanitizeOeeBatchDetails(source: unknown): OeeBatchDetailItem[] {
+  if (!Array.isArray(source)) return []
+  return source.map((item) => {
+    const row = item as Record<string, unknown>
+    return {
+      batchNo: String(row.batchNo || ''),
+      productName: String(row.productName || ''),
+      availability: percentValue(row.availability),
+      performance: percentValue(row.performance),
+      quality: percentValue(row.quality),
+      oee: percentValue(row.oee),
+      actualQty: toNumber(row.actualQty),
+      goodQty: toNumber(row.goodQty),
+      runMinutes: toNumber(row.runMinutes),
+      startTime: String(row.startTime || ''),
+      endTime: String(row.endTime || ''),
+    }
+  })
+}
+
+function sanitizeOeeReport(raw: OeeReportRaw | OeeReport): OeeReport {
+  const source = raw as OeeReportRaw
+  return {
+    reportType: source.reportType || (raw as OeeReport).reportType,
+    startDate: source.startDate || (raw as OeeReport).startDate,
+    endDate: source.endDate || (raw as OeeReport).endDate,
+    generateTime: source.generateTime || (raw as OeeReport).generateTime,
+    availability: percentValue(source.availability ?? (raw as OeeReport).availability),
+    performance: percentValue(source.performance ?? (raw as OeeReport).performance),
+    quality: percentValue(source.quality ?? (raw as OeeReport).quality),
+    oee: percentValue(source.oee ?? (raw as OeeReport).oee),
+    plannedMinutes: toNumber(source.plannedMinutes ?? (raw as OeeReport).plannedMinutes),
+    actualMinutes: toNumber(source.actualMinutes ?? (raw as OeeReport).actualMinutes),
+    theoreticalOutput: toNumber(source.theoreticalOutput ?? (raw as OeeReport).theoreticalOutput),
+    actualOutput: toNumber(source.actualOutput ?? (raw as OeeReport).actualOutput),
+    goodQty: toNumber(source.goodQty ?? (raw as OeeReport).goodQty),
+    badQty: toNumber(source.badQty ?? (raw as OeeReport).badQty),
+    batchCount: toNumber(source.batchCount ?? (raw as OeeReport).batchCount),
+    dailyTrends: sanitizeOeeTrend(source.dailyTrends || (raw as OeeReport).dailyTrends),
+    batchDetails: sanitizeOeeBatchDetails(source.batchDetails || (raw as OeeReport).batchDetails),
+    aiSummary: source.aiSummary || (raw as OeeReport).aiSummary,
   }
 }
 
@@ -529,12 +773,32 @@ function sanitizeReport(raw: ProductionReportRaw | ProductionReport): Production
 async function handleLoadReport() {
   loading.value = true
   try {
-    const res = await getProductionReport(normalizeType(reportType.value), selectedDate.value)
-    report.value = sanitizeReport(res.data || {})
+    const [productionResult, oeeResult] = await Promise.allSettled([
+      getProductionReport(normalizeType(reportType.value), selectedDate.value),
+      getOeeReport(reportType.value, selectedDate.value),
+    ])
+
+    if (productionResult.status === 'fulfilled') {
+      report.value = sanitizeReport(productionResult.value.data || {})
+    } else {
+      report.value = null
+    }
+
+    if (oeeResult.status === 'fulfilled') {
+      oeeReport.value = sanitizeOeeReport(oeeResult.value.data || {})
+    } else {
+      oeeReport.value = null
+    }
+
     emptyTip.value = '暂无生产报告，请选择日期后查询'
-    ElMessage.success(`${reportTypeLabel.value}查询成功`)
+    if (report.value || oeeReport.value) {
+      ElMessage.success(`${reportTypeLabel.value}查询成功`)
+    } else {
+      throw new Error('未获取到可展示的报告数据')
+    }
   } catch (error) {
     report.value = null
+    oeeReport.value = null
     ElMessage.error(error instanceof Error ? error.message : '获取生产报告失败')
   } finally {
     loading.value = false

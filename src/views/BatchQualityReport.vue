@@ -7,6 +7,15 @@
             <span>批次质量分析报告</span>
             <el-tag v-if="currentBatchNo" type="info">批次 {{ currentBatchNo }}</el-tag>
           </div>
+          <el-button
+            v-if="currentBatchNo"
+            type="primary"
+            plain
+            :loading="rootCauseLoading"
+            @click="handleLoadRootCause"
+          >
+            根因分析
+          </el-button>
         </div>
       </template>
 
@@ -113,6 +122,98 @@
             </el-tag>
           </div>
           <el-empty v-else description="暂无关键风险点" :image-size="50" />
+        </el-card>
+
+        <el-card shadow="never" class="section-card">
+          <template #header>
+            <div class="section-header-row">
+              <span>不良品根因分析</span>
+              <el-tag v-if="rootCauseReport?.generateTime" type="info">
+                {{ rootCauseReport.generateTime }}
+              </el-tag>
+            </div>
+          </template>
+
+          <el-empty
+            v-if="!rootCauseReport"
+            description="点击“根因分析”后查看批次不良品根因结果"
+            :image-size="60"
+          />
+
+          <div v-else class="root-cause-panel">
+            <el-descriptions :column="3" border>
+              <el-descriptions-item label="批次号">{{
+                rootCauseReport.batchNo || currentBatchNo
+              }}</el-descriptions-item>
+              <el-descriptions-item label="工单号">{{
+                rootCauseReport.woNo || '-'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="产品">{{
+                rootCauseReport.productName || '-'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="不良品">{{
+                formatNumber(rootCauseReport.badQty)
+              }}</el-descriptions-item>
+              <el-descriptions-item label="产量">{{
+                formatNumber(rootCauseReport.actualQty)
+              }}</el-descriptions-item>
+              <el-descriptions-item label="良率">{{
+                formatPercent(rootCauseReport.yieldRate)
+              }}</el-descriptions-item>
+              <el-descriptions-item label="主要原因">{{
+                primaryCauseLabel(rootCauseReport.primaryCause)
+              }}</el-descriptions-item>
+              <el-descriptions-item label="置信度">{{
+                formatPercent(rootCauseReport.confidence)
+              }}</el-descriptions-item>
+              <el-descriptions-item label="分析时间">{{
+                rootCauseReport.generateTime || '-'
+              }}</el-descriptions-item>
+            </el-descriptions>
+
+            <el-row :gutter="12" class="section-row">
+              <el-col :xs="24" :lg="12">
+                <el-card shadow="never" class="section-card compact">
+                  <template #header>
+                    <span>影响因子</span>
+                  </template>
+                  <el-empty
+                    v-if="!rootCauseFactors.length"
+                    description="当前批次无不良品或暂无影响因子"
+                    :image-size="60"
+                  />
+                  <el-table v-else :data="rootCauseFactors" stripe border style="width: 100%">
+                    <el-table-column prop="factorName" label="因子" min-width="130" />
+                    <el-table-column label="偏差评分" width="110">
+                      <template #default="{ row }">{{ formatNumber(row.deviationScore) }}</template>
+                    </el-table-column>
+                    <el-table-column
+                      prop="description"
+                      label="说明"
+                      min-width="220"
+                      show-overflow-tooltip
+                    />
+                  </el-table>
+                </el-card>
+              </el-col>
+
+              <el-col :xs="24" :lg="12">
+                <el-card shadow="never" class="section-card compact">
+                  <template #header>
+                    <span>AI 分析建议</span>
+                  </template>
+                  <el-descriptions :column="1" border>
+                    <el-descriptions-item label="AI 分析">
+                      {{ rootCauseReport.aiAnalysis || '-' }}
+                    </el-descriptions-item>
+                    <el-descriptions-item label="AI 建议">
+                      {{ rootCauseReport.aiSuggestion || '-' }}
+                    </el-descriptions-item>
+                  </el-descriptions>
+                </el-card>
+              </el-col>
+            </el-row>
+          </div>
         </el-card>
 
         <el-row :gutter="12" class="section-row">
@@ -274,6 +375,7 @@
 import {
   getBatchQualityReport,
   getBatchQualityTimeSeries,
+  getDefectRootCause,
   type BatchAiAssessment,
   type BatchAlarmDistribution,
   type BatchEquipmentStat,
@@ -282,6 +384,8 @@ import {
   type BatchQualityReportRaw,
   type BatchStationStat,
   type BatchTimeSeriesPoint,
+  type DefectRootCauseFactor,
+  type DefectRootCauseReport,
 } from '@/api/batchQuality'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
@@ -294,6 +398,8 @@ const MAX_RETRY_COUNT = 2
 const loading = ref(false)
 const report = ref<BatchQualityReport | null>(null)
 const loadingMessage = ref('正在查询批次质量报告...')
+const rootCauseLoading = ref(false)
+const rootCauseReport = ref<DefectRootCauseReport | null>(null)
 
 const timeSeriesVisible = ref(false)
 const timeSeriesLoading = ref(false)
@@ -371,6 +477,10 @@ const aiAssessment = computed<BatchAiAssessment>(() => {
 const riskHighlights = computed<string[]>(() => {
   return aiAssessment.value.riskHighlights || []
 })
+
+const rootCauseFactors = computed<DefectRootCauseFactor[]>(
+  () => rootCauseReport.value?.factors || [],
+)
 
 const normalizeScore = (score?: number) => {
   if (typeof score !== 'number' || Number.isNaN(score)) return 0
@@ -462,6 +572,19 @@ const splitToList = (value: unknown) => {
     .split(/[;；\n]/)
     .map((item) => item.trim())
     .filter((item) => item.length > 0)
+}
+
+const primaryCauseLabel = (value?: string) => {
+  const map: Record<string, string> = {
+    MIXING_DEVIATION: '配液参数偏移',
+    EQUIPMENT_PRECISION: '罐装设备精度',
+    RAW_MATERIAL: '原料批次问题',
+    MULTIPLE: '多因素叠加',
+    UNKNOWN: '原因不明',
+    NONE: '无不良品',
+  }
+  const key = String(value || '').toUpperCase()
+  return map[key] || value || '-'
 }
 
 const sanitizeStationStats = (source: unknown): BatchStationStat[] => {
@@ -716,6 +839,7 @@ const loadCurrentBatchReport = async (batchNo: string) => {
   const normalizedBatchNo = batchNo.trim()
   searchForm.batchNo = normalizedBatchNo
   report.value = null
+  rootCauseReport.value = null
 
   if (!normalizedBatchNo) return
 
@@ -728,6 +852,26 @@ const loadCurrentBatchReport = async (batchNo: string) => {
   } finally {
     loading.value = false
     loadingMessage.value = '正在查询批次质量报告...'
+  }
+}
+
+const handleLoadRootCause = async () => {
+  const batchNo = currentBatchNo.value
+  if (!batchNo) {
+    ElMessage.warning('当前批次号为空，无法执行根因分析')
+    return
+  }
+
+  rootCauseLoading.value = true
+  try {
+    const res = await getDefectRootCause(batchNo)
+    rootCauseReport.value = res.data || null
+    ElMessage.success('根因分析加载成功')
+  } catch (error) {
+    rootCauseReport.value = null
+    ElMessage.error(error instanceof Error ? error.message : '根因分析加载失败')
+  } finally {
+    rootCauseLoading.value = false
   }
 }
 
