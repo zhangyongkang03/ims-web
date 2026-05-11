@@ -102,9 +102,6 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="参数名称" prop="parameterName">
-          <el-input v-model="formData.parameterName" placeholder="如: temperature / brix / speed" />
-        </el-form-item>
         <el-form-item label="目标值" prop="targetValue">
           <el-input-number v-model="formData.targetValue" :precision="2" :step="0.1" />
         </el-form-item>
@@ -162,6 +159,7 @@ import {
   deleteCraftDetail,
   getCraftDetailList,
   updateCraftDetail,
+  type AddCraftDetailForm,
   type CraftDetail,
   type CraftDetailForm,
 } from '@/api/craft'
@@ -233,7 +231,6 @@ const formState = reactive({
 const rules = {
   processType: [{ required: true, message: '工序类型不能为空' }],
   deviceCode: [{ required: true, message: '设备不能为空' }],
-  parameterName: [{ required: true, message: '参数名称不能为空' }],
   targetValue: [{ required: true, message: '目标值不能为空' }],
   maxThreshold: [{ required: true, message: '上限阈值不能为空' }],
   minThreshold: [{ required: true, message: '下限阈值不能为空' }],
@@ -330,10 +327,12 @@ const handleSubmit = async () => {
 
     try {
       if (dialogType.value === 'add') {
-        await addCraftDetail(formData)
+        const { id: _id, parameterName: _parameterName, ...payload } = formData
+        await addCraftDetail(payload as AddCraftDetailForm)
         ElMessage.success('新增成功')
       } else {
-        await updateCraftDetail(formData.id!, formData)
+        const { id: _id, parameterName: _parameterName, ...payload } = formData
+        await updateCraftDetail(formData.id!, payload)
         ElMessage.success('修改成功')
       }
 

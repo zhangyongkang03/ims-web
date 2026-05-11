@@ -193,6 +193,10 @@ function normalizeShippableOrder(raw: any): ShippableOrder {
 }
 
 function normalizeProductPending(raw: any): ProductPending {
+  const quantity = Number(raw?.quantity ?? 0)
+  const putAwayQty = Number(raw?.putAwayQty ?? raw?.putawayqty ?? 0)
+  const pendingQtyRaw = raw?.pendingQty ?? raw?.pendingqty
+
   return {
     receiveId: String(raw?.receiveId ?? raw?.receiveid ?? raw?.pendingId ?? ''),
     receiveNo: raw?.receiveNo ?? raw?.receiveno ?? raw?.pendingNo,
@@ -200,12 +204,20 @@ function normalizeProductPending(raw: any): ProductPending {
     pId: Number(raw?.pId ?? raw?.pid ?? 0),
     pCode: raw?.pCode ?? raw?.pcode,
     pName: raw?.pName ?? raw?.pname,
-    quantity: Number(raw?.quantity ?? 0),
-    putAwayQty: Number(raw?.putAwayQty ?? raw?.putawayqty ?? 0),
-    pendingQty: Number(raw?.pendingQty ?? raw?.pendingqty ?? 0),
+    quantity,
+    putAwayQty,
+    pendingQty:
+      pendingQtyRaw !== undefined && pendingQtyRaw !== null
+        ? Number(pendingQtyRaw)
+        : Math.max(0, quantity - putAwayQty),
     uom: raw?.uom,
     uomName: raw?.uomName ?? raw?.uomname,
-    state: raw?.state ?? raw?.status,
+    state:
+      raw?.state !== undefined && raw?.state !== null
+        ? Number(raw.state)
+        : raw?.status !== undefined && raw?.status !== null
+          ? Number(raw.status)
+          : undefined,
     stateLabel: raw?.stateLabel ?? raw?.statusLabel,
     operatorId:
       raw?.operatorId !== undefined && raw?.operatorId !== null

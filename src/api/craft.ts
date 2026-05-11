@@ -49,6 +49,10 @@ export interface CraftDetailForm {
   unit: string
 }
 
+export type AddCraftDetailForm = Omit<CraftDetailForm, 'id' | 'parameterName'> & {
+  parameterName?: string
+}
+
 // 分页响应
 export interface PageResult<T> {
   total: number
@@ -122,7 +126,7 @@ export function getCraftDetailInfo(id: number) {
 /**
  * 新增工艺参数明细
  */
-export function addCraftDetail(data: CraftDetailForm) {
+export function addCraftDetail(data: AddCraftDetailForm) {
   return request.post<ApiResponse>('/craft-details', data)
 }
 

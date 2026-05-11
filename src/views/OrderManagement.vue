@@ -23,9 +23,11 @@
           class="search-select"
         >
           <el-option label="待生产" :value="0" />
-          <el-option label="生产中" :value="1" />
-          <el-option label="已完成" :value="2" />
-          <el-option label="已结案" :value="3" />
+          <el-option label="配液中" :value="1" />
+          <el-option label="待罐装" :value="2" />
+          <el-option label="罐装中" :value="3" />
+          <el-option label="已完成" :value="4" />
+          <el-option label="已关闭" :value="5" />
         </el-select>
         <el-button type="primary" @click="handleSearch">搜索</el-button>
         <el-button @click="handleReset">重置</el-button>
@@ -62,16 +64,7 @@
               size="small"
               @click="handleStart(scope.row)"
             >
-              开始
-            </el-button>
-            <el-button
-              v-if="scope.row.status === 1"
-              link
-              type="warning"
-              size="small"
-              @click="handleReport(scope.row)"
-            >
-              报工
+              开始配液
             </el-button>
             <el-button
               v-if="scope.row.status === 1"
@@ -80,16 +73,16 @@
               size="small"
               @click="handleComplete(scope.row)"
             >
-              完成
+              完成配液
             </el-button>
             <el-button
-              v-if="scope.row.status === 2"
+              v-if="scope.row.status === 4"
               link
               type="success"
               size="small"
               @click="handleClose(scope.row)"
             >
-              结案
+              关闭
             </el-button>
             <el-button
               v-if="scope.row.status === 0"
@@ -250,9 +243,11 @@ const filteredRecipes = computed(() => {
 const statusFormatter = (status: number) => {
   const statusMap: { [key: number]: string } = {
     0: '待生产',
-    1: '生产中',
-    2: '已完成',
-    3: '已结案',
+    1: '配液中',
+    2: '待罐装',
+    3: '罐装中',
+    4: '已完成',
+    5: '已关闭',
   }
   return statusMap[status] || '未知'
 }
@@ -363,7 +358,7 @@ const handleDetail = (row: WorkOrder) => {
 }
 
 const handleStart = (row: WorkOrder) => {
-  ElMessageBox.confirm('确定开始生产吗?', '确认', {
+  ElMessageBox.confirm('确定开始配液吗?', '确认', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
@@ -371,10 +366,10 @@ const handleStart = (row: WorkOrder) => {
     .then(async () => {
       try {
         const res = await startProduction(row.woId)
-        ElMessage.success(`生产已开始，批次号: ${res.data}`)
+        ElMessage.success(`已开始配液，批次号: ${res.data}`)
         getList()
       } catch (error) {
-        console.error('开始生产失败:', error)
+        console.error('开始配液失败:', error)
       }
     })
     .catch(() => {
@@ -403,7 +398,7 @@ const submitReport = async () => {
 }
 
 const handleComplete = (row: WorkOrder) => {
-  ElMessageBox.confirm('确定完成生产吗?', '确认', {
+  ElMessageBox.confirm('确定完成配液并进入待罐装状态吗?', '确认', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
@@ -411,10 +406,10 @@ const handleComplete = (row: WorkOrder) => {
     .then(async () => {
       try {
         await completeProduction(row.woId)
-        ElMessage.success('生产已完成')
+        ElMessage.success('配液已完成')
         getList()
       } catch (error) {
-        console.error('完成生产失败:', error)
+        console.error('完成配液失败:', error)
       }
     })
     .catch(() => {
@@ -423,7 +418,7 @@ const handleComplete = (row: WorkOrder) => {
 }
 
 const handleClose = (row: WorkOrder) => {
-  ElMessageBox.confirm('确定结案归档吗?', '确认', {
+  ElMessageBox.confirm('确定关闭工单吗?', '确认', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
@@ -431,10 +426,10 @@ const handleClose = (row: WorkOrder) => {
     .then(async () => {
       try {
         await closeOrder(row.woId)
-        ElMessage.success('工单已结案')
+        ElMessage.success('工单已关闭')
         getList()
       } catch (error) {
-        console.error('结案失败:', error)
+        console.error('关闭工单失败:', error)
       }
     })
     .catch(() => {

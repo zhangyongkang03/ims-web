@@ -400,6 +400,8 @@ const pendingStatusOptions = [
   { label: '已入库', value: 1 },
 ]
 
+const CLOSED_WORK_ORDER_STATUS = 5
+
 interface PutAwayPlanItem {
   whId: string
   whName: string
@@ -445,7 +447,7 @@ const selectedShippableOrder = computed(() => {
 })
 
 const closedShippableOrderList = computed(() =>
-  shippableOrderList.value.filter((item) => Number(item.status) === 3),
+  shippableOrderList.value.filter((item) => Number(item.status) === CLOSED_WORK_ORDER_STATUS),
 )
 
 const shipMaxQty = computed(() => {
@@ -654,15 +656,18 @@ const handlePutAwayWhChange = async (whId?: string) => {
 }
 
 const openPutAwayDialog = async (row: ProductPending) => {
+  currentPending.value = { ...row }
+  putAwayForm.receiveId = row.receiveId
+  resetPutAwayForm()
+  putAwayPlanList.value = []
+  putAwayDialogVisible.value = true
+
   try {
     const res = await getProductPendingDetail(row.receiveId)
     currentPending.value = res.data
-    putAwayForm.receiveId = row.receiveId
-    resetPutAwayForm()
-    putAwayPlanList.value = []
-    putAwayDialogVisible.value = true
   } catch (error) {
     console.error('加载待入库详情失败:', error)
+    ElMessage.warning('待入库详情加载失败，已使用列表数据，可继续执行入库')
   }
 }
 
@@ -786,7 +791,7 @@ const handleShipSubmit = async () => {
   await shipFormRef.value.validate(async (valid) => {
     if (!valid) return
 
-    if (Number(selectedShippableOrder.value?.status) !== 3) {
+    if (Number(selectedShippableOrder.value?.status) !== CLOSED_WORK_ORDER_STATUS) {
       ElMessage.error('只有已关闭的工单才能出库')
       return
     }

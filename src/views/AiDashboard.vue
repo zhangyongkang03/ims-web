@@ -385,6 +385,9 @@ const searchForm = reactive({
   deviceCode: '',
 })
 
+const compareDeviceCode = (left: string, right: string) =>
+  left.localeCompare(right, 'zh-CN', { numeric: true, sensitivity: 'base' })
+
 const mixingWorkshopAnalysis = computed(() => aiCardsMap.value[MIXING_WORKSHOP_CODE])
 
 const mixingSensorStats = computed<SensorMeanStat[]>(() => {
@@ -393,6 +396,7 @@ const mixingSensorStats = computed<SensorMeanStat[]>(() => {
 })
 
 const realtimeMonitorList = computed<RealtimeMonitorItem[]>(() => {
+  const deviceOrder = new Map(deviceCodes.value.map((code, index) => [code, index]))
   const fastRiskItems = Object.values(fastRiskMap.value).map((item) => ({
     deviceCode: item.deviceCode,
     processType: item.processType,
@@ -419,7 +423,18 @@ const realtimeMonitorList = computed<RealtimeMonitorItem[]>(() => {
       timestamp: item.ts,
     }))
 
-  return [...fastRiskItems, ...dashboardItems].sort((a, b) => b.timestamp - a.timestamp)
+  return [...fastRiskItems, ...dashboardItems].sort((a, b) => {
+    const aOrder = deviceOrder.get(a.deviceCode)
+    const bOrder = deviceOrder.get(b.deviceCode)
+
+    if (aOrder !== undefined && bOrder !== undefined) {
+      return aOrder - bOrder
+    }
+    if (aOrder !== undefined) return -1
+    if (bOrder !== undefined) return 1
+
+    return compareDeviceCode(a.deviceCode, b.deviceCode)
+  })
 })
 
 const cardList = computed<DashboardCardItem[]>(() => {
@@ -917,7 +932,10 @@ const normalizeDeviceMeta = (device: Device): DeviceMetaItem => ({
 
 const loadDeviceCodes = async () => {
   const res = await getDeviceList({ pageNum: 1, pageSize: 200 })
-  deviceCodes.value = res.data.records.map((d) => d.deviceCode).filter(Boolean)
+  deviceCodes.value = res.data.records
+    .map((d) => d.deviceCode)
+    .filter(Boolean)
+    .sort(compareDeviceCode)
   deviceMetaMap.value = Object.fromEntries(
     res.data.records
       .filter((device) => device.deviceCode)
