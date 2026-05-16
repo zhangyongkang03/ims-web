@@ -11,6 +11,7 @@
       <el-tabs :model-value="activeTab" @tab-change="handleTabChange" class="page-tabs">
         <el-tab-pane label="库存查询" name="stock" />
         <el-tab-pane label="材料入库" name="lot" />
+        <el-tab-pane label="材料出库申请" name="request" />
       </el-tabs>
 
       <div class="section-title">待入库批次（登记后可稍后入库）</div>
@@ -324,7 +325,11 @@ const materialWarehouseList = computed(() =>
   warehouseList.value.filter((warehouse) => Number(warehouse.whType) === 1),
 )
 
-const activeTab = computed(() => (route.path.startsWith('/material/stock') ? 'stock' : 'lot'))
+const activeTab = computed(() => {
+  const tab = typeof route.query.tab === 'string' ? route.query.tab : ''
+  if (tab === 'request') return 'request'
+  return route.path.startsWith('/material/stock') ? 'stock' : 'lot'
+})
 
 const plannedPutAwayQuantity = computed(() =>
   putAwayPlanList.value.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
@@ -340,6 +345,15 @@ const handleTabChange = (name: string | number) => {
     router.push('/material/stock')
     return
   }
+
+  if (name === 'request') {
+    router.push({
+      path: '/material/stock',
+      query: { tab: 'request', status: '0' },
+    })
+    return
+  }
+
   router.push('/material/lot')
 }
 

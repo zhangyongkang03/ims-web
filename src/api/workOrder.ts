@@ -24,7 +24,7 @@ export interface Consumption {
 export interface Batch {
   batchId: string
   batchNo: string
-  operatorId?: number
+  operatorId?: number | string
   operatorName?: string
   targetQty: number
   actualQty: number
@@ -32,8 +32,9 @@ export interface Batch {
   goodQty: number
   batchStatus: number
   batchStatusLabel: string
-  startTime: string
+  startTime?: string | null
   endTime?: string
+  createTime?: string
 }
 
 /** 工单列表项 */

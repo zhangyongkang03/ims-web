@@ -100,7 +100,7 @@
         </el-table-column>
         <el-table-column prop="batchStatusLabel" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.batchStatus === 1 ? 'warning' : 'success'">
+            <el-tag :type="batchStatusTagType(row.batchStatus)">
               {{ row.batchStatusLabel }}
             </el-tag>
           </template>
@@ -122,6 +122,15 @@
                 >完成</el-button
               >
             </template>
+            <el-button
+              v-else-if="row.batchStatus === 0"
+              link
+              type="warning"
+              size="small"
+              @click="goToPendingRequest()"
+            >
+              {{ row.batchStatusLabel || '备料中' }}
+            </el-button>
             <span v-else style="color: #909399; font-size: 12px">已完成</span>
           </template>
         </el-table-column>
@@ -229,6 +238,12 @@ const hasRunningBatch = computed(() => {
   return detail.value?.batchList?.some((b) => b.batchStatus === 1) ?? false
 })
 
+const hasPendingBatch = computed(() => {
+  return detail.value?.batchList?.some((b) => b.batchStatus === 0) ?? false
+})
+
+const hasOpenBatch = computed(() => hasPendingBatch.value || hasRunningBatch.value)
+
 const canStartMixing = computed(() => detail.value?.status === 0)
 
 const canCompleteMixing = computed(() => detail.value?.status === 1)
@@ -237,24 +252,34 @@ const canStartFilling = computed(() => {
   if (!detail.value) return false
   return (
     (detail.value.status === 2 || detail.value.status === 3) &&
-    !hasRunningBatch.value &&
+    !hasOpenBatch.value &&
     remaining.value > 0
   )
 })
 
 const canCloseOrder = computed(() => {
   if (!detail.value) return false
-  return detail.value.status !== 5 && !hasRunningBatch.value
+  return detail.value.status !== 5 && !hasOpenBatch.value
 })
 
 const statusTagType = (status: number): 'info' | 'warning' | 'success' | 'danger' => {
   const map: Record<number, 'info' | 'warning' | 'success' | 'danger'> = {
     0: 'info',
+    6: 'warning',
     1: 'warning',
     2: 'warning',
     3: 'warning',
     4: 'success',
     5: 'danger',
+  }
+  return map[status] ?? 'info'
+}
+
+const batchStatusTagType = (status: number): 'info' | 'warning' | 'success' => {
+  const map: Record<number, 'info' | 'warning' | 'success'> = {
+    0: 'info',
+    1: 'warning',
+    2: 'success',
   }
   return map[status] ?? 'info'
 }
@@ -275,9 +300,20 @@ const loadUsers = async () => {
   userList.value = res.data.records
 }
 
+const goToPendingRequest = () => {
+  router.push({
+    path: '/material/stock',
+    query: {
+      tab: 'request',
+      status: '0',
+      ...(detail.value?.woNo ? { woNo: detail.value.woNo } : {}),
+    },
+  })
+}
+
 // ---- 配液 ----
 const handleStartMixing = () => {
-  ElMessageBox.confirm('确定开始配液吗？系统将一次性完成原料扣减。', '确认', {
+  ElMessageBox.confirm('确定发起启动配液申请吗？系统将预检库存并生成待确认出库申请单。', '确认', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
@@ -285,7 +321,7 @@ const handleStartMixing = () => {
     .then(async () => {
       try {
         await startMixing(woId)
-        ElMessage.success('已开始配液')
+        ElMessage.success('已生成出库申请单，工单已进入备料中，请前往材料库存-材料出库申请确认')
         loadDetail()
       } catch (error) {
         console.error('开始配液失败:', error)
@@ -333,7 +369,11 @@ const handleStartBatch = async () => {
       batchTargetQty: batchForm.batchTargetQty,
       operatorId: batchForm.operatorId,
     })
-    ElMessage.success(`罐装批次已启动，批次号: ${res.data}`)
+    ElMessage.success(
+      res.data
+        ? `已生成出库申请单，请前往材料库存-材料出库申请确认。预分配批次号: ${res.data}`
+        : '已生成出库申请单，请前往材料库存-材料出库申请确认',
+    )
     startBatchVisible.value = false
     loadDetail()
   } catch (error) {

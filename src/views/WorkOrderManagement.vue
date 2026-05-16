@@ -26,6 +26,7 @@
           class="search-select"
         >
           <el-option label="待生产" :value="0" />
+          <el-option label="备料中" :value="6" />
           <el-option label="配液中" :value="1" />
           <el-option label="待罐装" :value="2" />
           <el-option label="罐装中" :value="3" />
@@ -247,6 +248,7 @@ const rules = {
 const statusTagType = (status: number): 'info' | 'warning' | 'success' | 'danger' => {
   const map: Record<number, 'info' | 'warning' | 'success' | 'danger'> = {
     0: 'info',
+    6: 'warning',
     1: 'warning',
     2: 'warning',
     3: 'warning',
@@ -262,7 +264,7 @@ const getProgressPercent = (row: WorkOrder) => {
 }
 
 const canCloseFromList = (row: WorkOrder) => {
-  return row.status === 0 || row.status === 2 || row.status === 4
+  return row.status === 0 || row.status === 6 || row.status === 2 || row.status === 4
 }
 
 // ---- 列表 ----
@@ -335,14 +337,14 @@ const handleEdit = async (row: WorkOrder) => {
 }
 
 const handleStartMixing = (row: WorkOrder) => {
-  ElMessageBox.confirm('确定开始配液吗？系统将按 FEFO 一次性扣减全部原料。', '确认', {
+  ElMessageBox.confirm('确定发起启动配液申请吗？系统将预检库存并生成待确认出库申请单。', '确认', {
     confirmButtonText: '确定',
     cancelButtonText: '取消',
     type: 'warning',
   })
     .then(async () => {
       await startMixing(row.woId)
-      ElMessage.success('已开始配液')
+      ElMessage.success('已生成出库申请单，工单已进入备料中，请前往材料库存-材料出库申请确认')
       getList()
     })
     .catch(() => {})
