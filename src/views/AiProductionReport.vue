@@ -103,11 +103,11 @@
               <el-col :xs="24" :xl="10">
                 <el-card shadow="never" class="section-card full-height">
                   <template #header>
-                    <span>不良品工序分布</span>
+                    <span>报警工序分布</span>
                   </template>
                   <el-empty
                     v-if="!defectDistribution.length"
-                    description="暂无不良品工序分布"
+                    description="暂无报警工序分布"
                     :image-size="80"
                   />
                   <el-table
@@ -124,11 +124,13 @@
                       }}</template>
                     </el-table-column>
                     <el-table-column prop="processType" label="工序类型" min-width="120" />
-                    <el-table-column label="不良数量" width="100">
+                    <el-table-column label="报警次数" width="100">
                       <template #default="{ row }">{{ formatNumber(row.badQty) }}</template>
                     </el-table-column>
-                    <el-table-column label="不良率" width="100">
-                      <template #default="{ row }">{{ formatPercent(row.defectRate) }}</template>
+                    <el-table-column label="占比" width="100">
+                      <template #default="{ row }">{{
+                        formatNormalizedPercent(row.defectRate)
+                      }}</template>
                     </el-table-column>
                   </el-table>
                 </el-card>
@@ -136,43 +138,108 @@
             </el-row>
 
             <el-row :gutter="12" class="section-row">
-              <el-col :xs="24" :xl="12">
+              <el-col v-if="showTrendSection" :xs="24" :xl="12">
                 <el-card shadow="never" class="section-card full-height">
                   <template #header>
-                    <span>日趋势曲线数据</span>
+                    <span>{{ trendSectionTitle }}</span>
                   </template>
                   <el-empty v-if="!dailyTrend.length" description="暂无趋势数据" :image-size="80" />
-                  <el-table
-                    v-else
-                    :data="dailyTrend"
-                    stripe
-                    border
-                    style="width: 100%"
-                    max-height="420"
-                  >
-                    <el-table-column prop="label" label="日期" min-width="120">
-                      <template #default="{ row }">{{ row.label || row.date || '-' }}</template>
-                    </el-table-column>
-                    <el-table-column label="总产量" width="110">
-                      <template #default="{ row }">{{ formatNumber(row.totalOutput) }}</template>
-                    </el-table-column>
-                    <el-table-column label="良品产量" width="110">
-                      <template #default="{ row }">{{
-                        formatNumber(row.qualifiedOutput)
-                      }}</template>
-                    </el-table-column>
-                    <el-table-column label="不良数量" width="110">
-                      <template #default="{ row }">{{ formatNumber(row.badQty) }}</template>
-                    </el-table-column>
-                    <el-table-column label="批次数" width="100">
-                      <template #default="{ row }">{{ formatNumber(row.batchCount) }}</template>
-                    </el-table-column>
-                    <el-table-column label="良率" width="100">
-                      <template #default="{ row }">{{
-                        formatPercent(row.qualificationRate)
-                      }}</template>
-                    </el-table-column>
-                  </el-table>
+                  <div v-else class="trend-chart-wrap">
+                    <div class="trend-legend">
+                      <span class="legend-item">
+                        <i class="legend-dot legend-output"></i>
+                        总产量
+                      </span>
+                      <span class="legend-item">
+                        <i class="legend-dot legend-bad"></i>
+                        不良数量
+                      </span>
+                      <span class="legend-item">
+                        <i class="legend-dot legend-yield"></i>
+                        良率
+                      </span>
+                    </div>
+
+                    <svg
+                      class="trend-chart"
+                      viewBox="0 0 720 220"
+                      role="img"
+                      aria-label="生产日报趋势图"
+                    >
+                      <line
+                        v-for="line in dailyTrendChart.gridLines"
+                        :key="`grid-${line.value}`"
+                        :x1="line.x1"
+                        :y1="line.y"
+                        :x2="line.x2"
+                        :y2="line.y"
+                        class="chart-grid"
+                      />
+
+                      <text
+                        v-for="line in dailyTrendChart.gridLines"
+                        :key="`left-${line.value}`"
+                        :x="52"
+                        :y="line.y + 4"
+                        class="axis-label"
+                      >
+                        {{ line.value }}
+                      </text>
+
+                      <text
+                        v-for="tick in dailyTrendChart.rightAxisTicks"
+                        :key="`right-${tick.value}`"
+                        :x="670"
+                        :y="tick.y + 4"
+                        class="axis-label axis-label-right"
+                      >
+                        {{ tick.value }}%
+                      </text>
+
+                      <polyline
+                        :points="dailyTrendChart.outputPoints"
+                        class="chart-line chart-line-output"
+                      />
+                      <polyline
+                        :points="dailyTrendChart.badPoints"
+                        class="chart-line chart-line-bad"
+                      />
+                      <polyline
+                        :points="dailyTrendChart.yieldPoints"
+                        class="chart-line chart-line-yield"
+                      />
+
+                      <g v-for="item in dailyTrendChart.points" :key="item.label">
+                        <circle
+                          :cx="item.x"
+                          :cy="item.outputY"
+                          r="4"
+                          class="chart-point chart-point-output"
+                        />
+                        <circle
+                          :cx="item.x"
+                          :cy="item.badY"
+                          r="4"
+                          class="chart-point chart-point-bad"
+                        />
+                        <circle
+                          :cx="item.x"
+                          :cy="item.yieldY"
+                          r="4"
+                          class="chart-point chart-point-yield"
+                        />
+                        <text
+                          v-if="item.showLabel"
+                          :x="item.x"
+                          y="202"
+                          text-anchor="middle"
+                          class="axis-label axis-label-x"
+                        >
+                          {{ item.shortLabel }}
+                        </text>
+                      </g>
+                    </svg>
+                  </div>
                 </el-card>
               </el-col>
 
@@ -450,6 +517,74 @@ const defectDistribution = computed<ProductionDefectItem[]>(
   () => report.value?.defectDistribution || [],
 )
 const dailyTrend = computed<ProductionTrendItem[]>(() => report.value?.dailyTrend || [])
+const trendSectionTitle = computed(() => {
+  if (reportType.value === 'monthly') return '月趋势图'
+  if (reportType.value === 'weekly') return '周趋势图'
+  return '日趋势曲线数据'
+})
+const showTrendSection = computed(() => reportType.value !== 'daily')
+const dailyTrendChart = computed(() => {
+  const chartWidth = 720
+  const chartHeight = 220
+  const left = 72
+  const right = 64
+  const top = 18
+  const bottom = 32
+  const plotWidth = chartWidth - left - right
+  const plotHeight = chartHeight - top - bottom
+  const points = dailyTrend.value
+
+  const outputValues = points.map((item) => toNumber(item.totalOutput) ?? 0)
+  const badValues = points.map((item) => toNumber(item.badQty) ?? 0)
+  const yieldValues = points.map((item) => toNumber(item.qualificationRate) ?? 0)
+  const leftMax = Math.max(1, ...outputValues, ...badValues)
+  const rightMax = 100
+  const stepX = points.length > 1 ? plotWidth / (points.length - 1) : 0
+  const labelStep = points.length > 20 ? 5 : points.length > 14 ? 3 : 1
+
+  const projectLeft = (value: number) => top + plotHeight - (value / leftMax) * plotHeight
+  const projectRight = (value: number) => top + plotHeight - (value / rightMax) * plotHeight
+
+  const normalizedPoints = points.map((item, index) => {
+    const x = left + stepX * index
+    const label = String(item.label || item.date || '-')
+    return {
+      label,
+      shortLabel: label.slice(5),
+      showLabel: index === 0 || index === points.length - 1 || index % labelStep === 0,
+      x,
+      outputY: projectLeft(toNumber(item.totalOutput) ?? 0),
+      badY: projectLeft(toNumber(item.badQty) ?? 0),
+      yieldY: projectRight(toNumber(item.qualificationRate) ?? 0),
+    }
+  })
+
+  const leftTicks = 4
+  const gridLines = Array.from({ length: leftTicks + 1 }, (_, index) => {
+    const value = Number(((leftMax / leftTicks) * (leftTicks - index)).toFixed(0))
+    const y = top + (plotHeight / leftTicks) * index
+    return {
+      value,
+      x1: left,
+      x2: left + plotWidth,
+      y,
+    }
+  })
+
+  const rightAxisTicks = [100, 75, 50, 25, 0].map((value) => ({
+    value,
+    y: projectRight(value),
+  }))
+
+  return {
+    gridLines,
+    rightAxisTicks,
+    points: normalizedPoints,
+    outputPoints: normalizedPoints.map((item) => `${item.x},${item.outputY}`).join(' '),
+    badPoints: normalizedPoints.map((item) => `${item.x},${item.badY}`).join(' '),
+    yieldPoints: normalizedPoints.map((item) => `${item.x},${item.yieldY}`).join(' '),
+  }
+})
 const batchDetails = computed<ProductionBatchDetailItem[]>(() => report.value?.batchDetails || [])
 const aiSummary = computed<ProductionAiSummary>(() => report.value?.aiSummary || {})
 const oeeDailyTrends = computed<OeeTrendItem[]>(() => oeeReport.value?.dailyTrends || [])
@@ -535,6 +670,12 @@ function formatNumber(value: unknown, digits = 0) {
 
 function formatPercent(value: unknown) {
   const num = percentValue(value)
+  if (num === undefined) return '-'
+  return `${num.toFixed(2)}%`
+}
+
+function formatNormalizedPercent(value: unknown) {
+  const num = toNumber(value)
   if (num === undefined) return '-'
   return `${num.toFixed(2)}%`
 }
@@ -665,11 +806,12 @@ function sanitizeDefectDistribution(source: unknown): ProductionDefectItem[] {
   if (!Array.isArray(source)) return []
   return source.map((item) => {
     const row = item as Record<string, unknown>
+    const directPercentage = toNumber(row.percentage)
     return {
       processName: String(row.processName || processTypeLabel(row.processType)),
       processType: String(row.processType || ''),
       badQty: toNumber(row.badQty ?? row.alarmCount),
-      defectRate: percentValue(row.defectRate ?? row.badRate ?? row.percentage),
+      defectRate: directPercentage ?? percentValue(row.defectRate ?? row.badRate),
     }
   })
 }
@@ -880,6 +1022,109 @@ onMounted(() => {
 
 .full-height {
   height: 100%;
+}
+
+.trend-chart-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trend-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #606266;
+  font-size: 13px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-output {
+  background: #2563eb;
+}
+
+.legend-bad {
+  background: #f97316;
+}
+
+.legend-yield {
+  background: #16a34a;
+}
+
+.trend-chart {
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  border: 1px solid #ebeef5;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
+}
+
+.chart-grid {
+  stroke: #dbe5f1;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-line-output {
+  stroke: #2563eb;
+}
+
+.chart-line-bad {
+  stroke: #f97316;
+}
+
+.chart-line-yield {
+  stroke: #16a34a;
+}
+
+.chart-point {
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.chart-point-output {
+  fill: #2563eb;
+}
+
+.chart-point-bad {
+  fill: #f97316;
+}
+
+.chart-point-yield {
+  fill: #16a34a;
+}
+
+.axis-label {
+  fill: #6b7280;
+  font-size: 12px;
+}
+
+.axis-label-right {
+  text-anchor: start;
+}
+
+.axis-label-x {
+  fill: #4b5563;
 }
 
 @media (max-width: 768px) {

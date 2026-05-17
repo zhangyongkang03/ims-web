@@ -74,9 +74,11 @@
         :page-sizes="[10, 20, 50, 100]"
         :total="pagination.total"
         :hide-on-single-page="false"
+        background
         layout="total, sizes, prev, pager, next, jumper"
         class="pagination"
-        @change="getList"
+        @current-change="handleCurrentPageChange"
+        @size-change="handlePageSizeChange"
       />
     </el-card>
 
@@ -224,8 +226,10 @@ const getList = async () => {
       keyword: searchForm.keyword || undefined,
       processType: searchForm.processType || undefined,
     })
-    tableData.value = res.data.records
-    pagination.total = res.data.total
+    tableData.value = res.data.records || []
+    pagination.pageNum = Number(res.data.pageNum || pagination.pageNum)
+    pagination.pageSize = Number(res.data.pageSize || pagination.pageSize)
+    pagination.total = Number(res.data.total || 0)
   } finally {
     loading.value = false
   }
@@ -239,6 +243,17 @@ const handleSearch = () => {
 const handleReset = () => {
   searchForm.keyword = ''
   searchForm.processType = undefined
+  pagination.pageNum = 1
+  getList()
+}
+
+const handleCurrentPageChange = (pageNum: number) => {
+  pagination.pageNum = pageNum
+  getList()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
   pagination.pageNum = 1
   getList()
 }
@@ -367,8 +382,11 @@ onMounted(() => {
 }
 
 .pagination {
-  margin-top: 12px;
+  display: flex;
   justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 8px;
+  border-top: 1px solid #ebeef5;
 }
 
 .test-search-form {
