@@ -26,6 +26,7 @@
         <el-button type="primary" :loading="loading" @click="handleGenerateByDate">
           {{ generateButtonText }}
         </el-button>
+        <el-button plain @click="goFailurePrediction">设备故障预测</el-button>
       </div>
 
       <div class="meta-row">
@@ -42,77 +43,6 @@
             <span>AI 产线全局评估</span>
           </template>
           <div class="overview-text">{{ overviewText }}</div>
-        </el-card>
-
-        <el-card shadow="never" class="section-card">
-          <template #header>
-            <div class="card-header">
-              <span>设备故障预测</span>
-              <el-text type="info">预测时间：{{ failurePrediction?.generateTime || '-' }}</el-text>
-            </div>
-          </template>
-
-          <div class="prediction-overview">
-            <el-tag type="info">设备总数：{{ failurePrediction?.totalDevices ?? 0 }}</el-tag>
-            <el-tag :type="warningDevicesCount > 0 ? 'danger' : 'success'">
-              风险设备：{{ warningDevicesCount }}
-            </el-tag>
-          </div>
-
-          <el-alert
-            v-if="failurePrediction?.aiOverview"
-            type="info"
-            show-icon
-            :closable="false"
-            class="prediction-alert"
-            :title="failurePrediction.aiOverview"
-          />
-
-          <el-empty
-            v-if="!failurePredictions.length"
-            description="当前所选日期没有退化风险设备"
-            :image-size="90"
-          />
-
-          <el-table v-else :data="failurePredictions" stripe border style="width: 100%">
-            <el-table-column prop="deviceCode" label="设备编码" width="120" />
-            <el-table-column prop="equipCode" label="所属设备" width="120" />
-            <el-table-column prop="equipName" label="设备名称" min-width="140" />
-            <el-table-column label="趋势" width="110">
-              <template #default="{ row }">
-                <span :style="{ color: failureTrendColor(row.trend) }">{{
-                  failureTrendLabel(row.trend)
-                }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="预测风险" width="110">
-              <template #default="{ row }">
-                <el-tag
-                  :type="urgencyTagType(normalizeUrgency(row.urgency || row.predictedRiskLevel))"
-                >
-                  {{ normalizeUrgency(row.urgency || row.predictedRiskLevel) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="本周/上周报警" width="130">
-              <template #default="{ row }">
-                {{ row.thisWeekAlarms ?? 0 }} / {{ row.lastWeekAlarms ?? 0 }}
-              </template>
-            </el-table-column>
-            <el-table-column label="报警增长率" width="110">
-              <template #default="{ row }">{{ formatPercent(row.alarmGrowthRate) }}</template>
-            </el-table-column>
-            <el-table-column label="距上次维修(天)" width="130">
-              <template #default="{ row }">{{ formatInteger(row.daysSinceLastRepair) }}</template>
-            </el-table-column>
-            <el-table-column prop="lastRepairDate" label="上次维修" width="120" />
-            <el-table-column
-              prop="aiRecommendation"
-              label="AI 建议"
-              min-width="280"
-              show-overflow-tooltip
-            />
-          </el-table>
         </el-card>
 
         <el-card shadow="never" class="section-card">
@@ -315,7 +245,6 @@ import {
   getDeviceDailyReportByDate,
   getDeviceMonthlyReportByDate,
   getDeviceWeeklyReportByDate,
-  getFailurePrediction,
   type DeviceAlarmTopItem,
   type DeviceDailyTrendPoint,
   type DeviceEquipmentSummary,
@@ -323,17 +252,17 @@ import {
   type DeviceReport,
   type DeviceTrend,
   type DeviceUrgency,
-  type FailurePredictionItem,
-  type FailurePredictionReport,
 } from '@/api/ai'
 import { ElMessage } from 'element-plus'
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 type ReportType = 'daily' | 'weekly' | 'monthly'
 
 const loading = ref(false)
 const report = ref<DeviceReport | null>(null)
-const failurePrediction = ref<FailurePredictionReport | null>(null)
 const emptyTip = ref('暂无报告，请选择日期后查询')
 const selectedDate = ref(getYesterday())
 const reportType = ref<ReportType>('daily')
@@ -399,14 +328,6 @@ const equipmentSummaries = computed<DeviceEquipmentSummary[]>(() => {
 const alarmTopDevices = computed<DeviceAlarmTopItem[]>(() => {
   return report.value?.alarmTopDevices || []
 })
-
-const failurePredictions = computed<FailurePredictionItem[]>(() => {
-  return failurePrediction.value?.predictions || []
-})
-
-const warningDevicesCount = computed(
-  () => failurePrediction.value?.warningDevices ?? failurePredictions.value.length,
-)
 
 const sortedSuggestions = computed<DeviceMaintenanceSuggestion[]>(() => {
   const source = report.value?.maintenanceSuggestions || []
@@ -557,48 +478,38 @@ function normalizeUrgency(value?: string): DeviceUrgency {
   return 'LOW'
 }
 
-function failureTrendLabel(trend?: string) {
-  if (trend === 'DETERIORATING') return '退化中'
-  if (trend === 'IMPROVING') return '改善中'
-  return trendLabel((trend as DeviceTrend) || 'STABLE')
-}
-
-function failureTrendColor(trend?: string) {
-  if (trend === 'DETERIORATING') return '#f56c6c'
-  if (trend === 'IMPROVING') return '#67c23a'
-  return trendColor((trend as DeviceTrend) || 'STABLE')
-}
-
 function errorMessage(error: unknown) {
   if (error instanceof Error && error.message) return error.message
   return '请求失败'
 }
 
+function goFailurePrediction() {
+  router.push({
+    name: 'AiFailurePrediction',
+    query: { date: selectedDate.value, from: 'device-report' },
+  })
+}
+
 async function handleGenerateByDate() {
   loading.value = true
   try {
-    const [reportResult, predictionResult] = await Promise.allSettled([
+    const res =
       reportType.value === 'weekly'
-        ? getDeviceWeeklyReportByDate(selectedDate.value)
+        ? await getDeviceWeeklyReportByDate(selectedDate.value)
         : reportType.value === 'monthly'
-          ? getDeviceMonthlyReportByDate(selectedDate.value)
-          : getDeviceDailyReportByDate(selectedDate.value),
-      getFailurePrediction(selectedDate.value),
-    ])
+          ? await getDeviceMonthlyReportByDate(selectedDate.value)
+          : await getDeviceDailyReportByDate(selectedDate.value)
 
-    report.value = reportResult.status === 'fulfilled' ? reportResult.value.data : null
-    failurePrediction.value =
-      predictionResult.status === 'fulfilled' ? predictionResult.value.data : null
+    report.value = res.data || null
 
-    if (!report.value && !failurePrediction.value) {
-      throw new Error('未获取到设备报告或故障预测数据')
+    if (!report.value) {
+      throw new Error('未获取到设备运行报告数据')
     }
 
     emptyTip.value = '暂无报告，请选择日期后查询'
     ElMessage.success(`${reportTypeLabel.value}查询成功`)
   } catch (error) {
     report.value = null
-    failurePrediction.value = null
     ElMessage.error(errorMessage(error))
   } finally {
     loading.value = false
@@ -607,7 +518,6 @@ async function handleGenerateByDate() {
 
 watch([reportType, selectedDate], () => {
   report.value = null
-  failurePrediction.value = null
   emptyTip.value = '暂无报告，请选择日期后查询'
 })
 </script>

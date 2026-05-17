@@ -8,14 +8,11 @@
               <p class="eyebrow">TEXT TO SQL</p>
               <h1>AI 智能问答</h1>
               <p class="hero-desc">
-                面向业务数据的自然语言查询。输入问题后，系统会生成只读 SQL、执行查询，并返回结构化结论。
+                面向业务数据的自然语言查询。输入问题后，系统会生成只读
+                SQL、执行查询，并返回结构化结论。
               </p>
             </div>
             <div class="hero-metrics">
-              <div class="metric-card">
-                <span class="metric-label">最近提问</span>
-                <strong class="metric-value">{{ chatHistory.length }}</strong>
-              </div>
               <div class="metric-card">
                 <span class="metric-label">最近响应时间</span>
                 <strong class="metric-value">{{ latestTimestamp || '-' }}</strong>
@@ -45,7 +42,7 @@
     </el-row>
 
     <el-row :gutter="16">
-      <el-col :xs="24" :xl="15">
+      <el-col :span="24">
         <el-card class="ask-card">
           <template #header>
             <div class="section-head">
@@ -124,33 +121,6 @@
           </div>
         </el-card>
       </el-col>
-
-      <el-col :xs="24" :xl="9">
-        <el-card class="history-card">
-          <template #header>
-            <div class="section-head">
-              <span>最近会话</span>
-              <el-tag type="success">{{ chatHistory.length }} 条</el-tag>
-            </div>
-          </template>
-
-          <el-empty v-if="!chatHistory.length" description="暂无提问记录" />
-
-          <div v-else class="history-list">
-            <button
-              v-for="item in chatHistory"
-              :key="item.timestamp + item.question"
-              type="button"
-              class="history-item"
-              @click="currentResult = item"
-            >
-              <div class="history-time">{{ item.timestamp }}</div>
-              <div class="history-question">{{ item.question }}</div>
-              <div class="history-answer">{{ item.answer }}</div>
-            </button>
-          </div>
-        </el-card>
-      </el-col>
     </el-row>
   </div>
 </template>
@@ -170,9 +140,8 @@ const samplePrompts = [
 const question = ref('')
 const loading = ref(false)
 const currentResult = ref<AiChatResponse | null>(null)
-const chatHistory = ref<AiChatResponse[]>([])
 
-const latestTimestamp = computed(() => chatHistory.value[0]?.timestamp || '')
+const latestTimestamp = computed(() => currentResult.value?.timestamp || '')
 const resultColumns = computed(() => {
   const firstRow = currentResult.value?.queryResult?.[0]
   return firstRow ? Object.keys(firstRow) : []
@@ -198,7 +167,6 @@ const submitQuestion = async () => {
   try {
     const res = await chatWithAi({ question: trimmedQuestion })
     currentResult.value = res.data
-    chatHistory.value = [res.data, ...chatHistory.value].slice(0, 8)
   } finally {
     loading.value = false
   }

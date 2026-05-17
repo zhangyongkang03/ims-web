@@ -75,7 +75,7 @@ const router = createRouter({
     },
     {
       path: '/ai/settings',
-      redirect: '/ai/dashboard',
+      redirect: '/dashboard',
     },
     {
       path: '/',
@@ -85,7 +85,7 @@ const router = createRouter({
         {
           path: 'dashboard',
           name: 'Dashboard',
-          component: () => import('@/views/Dashboard.vue'),
+          component: () => import('@/views/AiDashboard.vue'),
         },
         {
           path: 'system/user',
@@ -172,8 +172,8 @@ const router = createRouter({
         // AI辅助决策模块
         {
           path: 'ai/dashboard',
-          name: 'AiDashboard',
-          component: () => import('@/views/AiDashboard.vue'),
+          name: 'AiDashboardLegacy',
+          redirect: '/dashboard',
         },
         {
           path: 'ai/chat',
@@ -209,6 +209,11 @@ const router = createRouter({
           path: 'ai/device-report',
           name: 'AiDeviceReport',
           component: () => import('@/views/AiDeviceReport.vue'),
+        },
+        {
+          path: 'ai/failure-prediction',
+          name: 'AiFailurePrediction',
+          component: () => import('@/views/AiFailurePrediction.vue'),
         },
         {
           path: 'ai/traceability',

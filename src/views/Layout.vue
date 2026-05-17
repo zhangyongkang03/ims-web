@@ -108,7 +108,7 @@ const AI_KNOWLEDGE_PATH = '/ai/knowledge'
 const AI_RULES_PATH = '/ai/rules'
 const AI_DECISION_LOG_MENU_PATH = '/ai/decision-log'
 const AI_DECISIONS_PATH = '/ai/decisions'
-const HIDDEN_MENU_PATHS = new Set(['/ai/quality'])
+const HIDDEN_MENU_PATHS = new Set(['/ai/quality', '/ai/monitor'])
 
 const toFrontendPath = (path: string) => normalizeMenuPath(path)
 
@@ -355,7 +355,7 @@ const activeMenu = computed(() => {
 
 const currentRoute = computed(() => {
   const routeMap: Record<string, string> = {
-    '/dashboard': '控制台',
+    '/dashboard': '智能生产监控控制台',
     '/system/user': '用户管理',
     '/system/role': '角色管理',
     '/system/menu': '菜单管理',
@@ -377,14 +377,14 @@ const currentRoute = computed(() => {
     '/equipment/device': '传感器管理',
     '/equipment/repair-order': '维修工单管理',
     '/ai/chat': 'AI智能问答',
-    '/ai/dashboard': 'AI实时监控大屏',
     '/ai/decisions': '决策日志',
     '/ai/knowledge': '知识库管理',
     '/ai/rules': '规则配置',
     '/ai/batch-quality': '批次质量报告',
     '/ai/production-report': '产品生产报告',
     '/ai/traceability': '全流程溯源',
-    '/ai/device-report': '设备运行日报',
+    '/ai/device-report': '设备运行报告',
+    '/ai/failure-prediction': '设备故障预测',
   }
   if (route.path.startsWith('/base/wms/')) {
     return '库位管理'

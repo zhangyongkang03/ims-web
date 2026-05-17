@@ -21,10 +21,32 @@ export interface DashboardDeviceMetrics {
 
 export type DashboardDeviceValue = number | DashboardDeviceMetrics
 
+export interface DashboardActiveBatch {
+  batchNo?: string | null
+  targetQty?: number
+  actualQty?: number
+  badQty?: number
+  progress?: number
+  yieldRate?: number
+  duration?: string
+  durationSec?: number
+  woNo?: string | null
+  woTargetQty?: number
+  woCompletedQty?: number
+}
+
 export interface DashboardPushData {
-  productionCount: number
   devices: Record<string, DashboardDeviceValue>
   timestamp: number
+  productionCount?: number
+  todayTotalQty?: number
+  todayBadQty?: number
+  todayYieldRate?: number
+  todayBatchCount?: number
+  currentStatus?: string
+  currentBatchNo?: string | null
+  unhandledAlarms?: number
+  activeBatch?: DashboardActiveBatch | null
 }
 
 export interface AiAnalysisPushData {

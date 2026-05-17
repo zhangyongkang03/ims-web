@@ -72,7 +72,7 @@
               {{ structuredTrace.traceTime || '-' }}
             </div>
           </el-card>
-          <el-card shadow="never" class="summary-card">
+          <el-card v-if="isBackwardTrace" shadow="never" class="summary-card">
             <div class="summary-label">异常事件</div>
             <div class="summary-value">{{ structuredTrace.qualityEvents.length }}</div>
           </el-card>
@@ -296,118 +296,6 @@
           </el-table>
         </el-card>
 
-        <el-row v-if="isBackwardTrace" :gutter="12" class="section-row">
-          <el-col :xs="24" :xl="14">
-            <el-card shadow="never" class="section-card full-height">
-              <template #header>
-                <span>工序质量汇总</span>
-              </template>
-              <el-table
-                :data="structuredTrace.processSummaryList"
-                stripe
-                border
-                style="width: 100%"
-              >
-                <el-table-column prop="processName" label="工序" min-width="110" />
-                <el-table-column prop="parameterName" label="参数" min-width="100" />
-                <el-table-column label="均值" width="90">
-                  <template #default="{ row }">{{ formatValue(row.mean, 4) }}</template>
-                </el-table-column>
-                <el-table-column label="标准差" width="100">
-                  <template #default="{ row }">{{ formatValue(row.stdDev, 4) }}</template>
-                </el-table-column>
-                <el-table-column label="最小值" width="90">
-                  <template #default="{ row }">{{ formatValue(row.minVal, 2) }}</template>
-                </el-table-column>
-                <el-table-column label="最大值" width="90">
-                  <template #default="{ row }">{{ formatValue(row.maxVal, 2) }}</template>
-                </el-table-column>
-                <el-table-column label="超标率" width="100">
-                  <template #default="{ row }">
-                    <span :class="outOfRangeClass(row.outOfRangeRate)">{{
-                      formatPercent(row.outOfRangeRate)
-                    }}</span>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-card>
-          </el-col>
-
-          <el-col :xs="24" :xl="10">
-            <el-card shadow="never" class="section-card full-height">
-              <template #header>
-                <span>AI 风险摘要</span>
-              </template>
-              <el-empty
-                v-if="!filteredAiRiskRecords.length"
-                description="暂无 AI 风险记录"
-                :image-size="80"
-              />
-              <el-timeline v-else>
-                <el-timeline-item
-                  v-for="(item, index) in filteredAiRiskRecords"
-                  :key="`${item.deviceCode}-${index}`"
-                  :type="riskTimelineType(item.riskScore)"
-                >
-                  <div class="timeline-head">
-                    <strong>{{ item.deviceCode }}</strong>
-                    <el-tag :type="riskTagType(item.riskScore)">{{ item.riskLevel || '-' }}</el-tag>
-                  </div>
-                  <div class="timeline-meta">风险分 {{ formatRiskScore(item.riskScore) }}</div>
-                  <div class="timeline-meta">分析时间 {{ item.analysisTime || '-' }}</div>
-                  <div class="reason-text">{{ item.reason || '-' }}</div>
-                </el-timeline-item>
-              </el-timeline>
-            </el-card>
-          </el-col>
-        </el-row>
-
-        <el-row v-if="isBackwardTrace" :gutter="12" class="section-row">
-          <el-col :xs="24" :xl="14">
-            <el-card shadow="never" class="section-card full-height">
-              <template #header>
-                <span>质量事件</span>
-              </template>
-              <el-table
-                :data="structuredTrace.qualityEvents"
-                stripe
-                border
-                style="width: 100%"
-                max-height="420"
-              >
-                <el-table-column prop="deviceCode" label="设备编码" min-width="110" />
-                <el-table-column label="等级" width="100">
-                  <template #default="{ row }">
-                    <el-tag :type="alarmTagType(row.alarmLevel)">{{
-                      row.alarmLevel || '-'
-                    }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="当前值" width="100">
-                  <template #default="{ row }">{{ formatValue(row.currentValue, 2) }}</template>
-                </el-table-column>
-                <el-table-column prop="standardRange" label="标准范围" min-width="160" />
-                <el-table-column
-                  prop="alarmMsg"
-                  label="告警信息"
-                  min-width="260"
-                  show-overflow-tooltip
-                />
-                <el-table-column prop="createTime" label="发生时间" min-width="140" />
-              </el-table>
-            </el-card>
-          </el-col>
-
-          <el-col :xs="24" :xl="10">
-            <el-card shadow="never" class="section-card full-height">
-              <template #header>
-                <span>原始响应</span>
-              </template>
-              <pre class="raw-json">{{ rawPreview }}</pre>
-            </el-card>
-          </el-col>
-        </el-row>
-
         <el-card v-if="hasForwardSections" shadow="never" class="section-card">
           <template #header>
             <span>正向链路扩展信息</span>
@@ -513,12 +401,6 @@
 
       <div v-else-if="hasSearched && !loading" class="empty-result">
         <el-empty description="接口已返回，但未识别出结构化溯源数据" />
-        <el-card shadow="never" class="section-card raw-card">
-          <template #header>
-            <span>原始响应</span>
-          </template>
-          <pre class="raw-json">{{ rawPreview }}</pre>
-        </el-card>
       </div>
     </el-card>
   </div>
@@ -532,7 +414,6 @@ import {
   type TraceabilityAffectedBatch,
   type TraceabilityAiRiskRecord,
   type TraceabilityMaterialLotInfo,
-  type TraceabilityProcessSummaryItem,
   type TraceabilityProductDestination,
   type TraceabilityRecipeItem,
   type TraceabilityResponseRaw,
@@ -612,12 +493,12 @@ const filteredAiRiskRecords = computed<TraceabilityAiRiskRecord[]>(() => {
 })
 
 const productSpecText = computed(() => {
-  const spec = structuredTrace.value?.productInfo?.spec?.trim() || ''
+  const spec = formatSpecValue(structuredTrace.value?.productInfo?.spec)
   const unit = structuredTrace.value?.productInfo?.unit?.trim() || ''
   if (!spec && !unit) return '-'
   if (!spec) return unit
   if (!unit) return spec
-  return `${spec}${unit}`
+  return `${spec}/${unit}`
 })
 
 const recipeBaseQty = computed(() => {
@@ -657,8 +538,6 @@ const isBackwardTrace = computed(() => {
   const direction = structuredTrace.value?.direction || activeDirection.value
   return String(direction).toUpperCase() === 'BACKWARD' || direction === 'backward'
 })
-
-const rawPreview = computed(() => safeStringify(rawResult.value))
 
 const hasForwardSections = computed(() => {
   if (!structuredTrace.value) return false
@@ -731,6 +610,18 @@ const formatValue = (value: unknown, digits = 0) => {
   return String(value)
 }
 
+const formatSpecValue = (value: unknown) => {
+  const text = String(value || '').trim()
+  if (!text) return ''
+
+  const match = text.match(/^(\d+(?:\.\d+)?)(.*)$/)
+  if (!match) return text
+
+  const numeric = Number(match[1])
+  if (!Number.isFinite(numeric)) return text
+  return `${numeric.toFixed(2)}${match[2] || ''}`
+}
+
 const formatPercent = (value: unknown) => {
   if (value === null || value === undefined || value === '') return '-'
   const numeric = Number(value)
@@ -746,14 +637,6 @@ const quantityText = (value: unknown, unit: unknown) => {
   const qty = formatValue(value, 2)
   const unitText = unit ? String(unit) : ''
   return qty === '-' ? '-' : `${qty}${unitText ? ` ${unitText}` : ''}`
-}
-
-const outOfRangeClass = (value: TraceabilityProcessSummaryItem['outOfRangeRate']) => {
-  const numeric = Number(value)
-  if (!Number.isFinite(numeric)) return ''
-  if (numeric >= 10) return 'danger-text'
-  if (numeric >= 5) return 'warning-text'
-  return 'success-text'
 }
 
 const riskTagType = (value: TraceabilityAiRiskRecord['riskScore']) => {
@@ -841,14 +724,6 @@ const readNumberLike = (value: unknown): number | string | null => {
   if (value === null || value === undefined || value === '') return null
   if (typeof value === 'number' || typeof value === 'string') return value
   return String(value)
-}
-
-const safeStringify = (value: unknown) => {
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
-  }
 }
 
 watch(activeTab, (value) => {

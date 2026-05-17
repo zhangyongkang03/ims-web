@@ -5,7 +5,8 @@
         <p class="hero-kicker">SMART OPERATIONS</p>
         <h1>制造运营数据看板</h1>
         <p class="hero-desc">
-          汇总报警、生产、设备和维修四类核心指标，并保留 WebSocket 实时设备快照，便于同时查看趋势和现场状态。
+          汇总报警、生产、设备和维修四类核心指标，并保留 WebSocket
+          实时设备快照，便于同时查看趋势和现场状态。
         </p>
       </div>
       <div class="hero-actions">
@@ -27,7 +28,9 @@
           <div>
             <div class="summary-value">{{ alarmStats.totalCount }}</div>
             <div class="summary-label">报警总数</div>
-            <div class="summary-sub">未处理 {{ alarmStats.unhandledCount }}，高等级 {{ alarmStats.criticalCount }}</div>
+            <div class="summary-sub">
+              未处理 {{ alarmStats.unhandledCount }}，高等级 {{ alarmStats.criticalCount }}
+            </div>
           </div>
         </div>
       </el-col>
@@ -39,7 +42,10 @@
           <div>
             <div class="summary-value">{{ productionStats.totalOutput }}</div>
             <div class="summary-label">累计产量</div>
-            <div class="summary-sub">合格数 {{ productionStats.qualifiedOutput }}，合格率 {{ formatPercent(productionStats.qualificationRate) }}</div>
+            <div class="summary-sub">
+              合格数 {{ productionStats.qualifiedOutput }}，合格率
+              {{ formatPercent(productionStats.qualificationRate) }}
+            </div>
           </div>
         </div>
       </el-col>
@@ -51,7 +57,9 @@
           <div>
             <div class="summary-value">{{ equipmentStats.totalCount }}</div>
             <div class="summary-label">设备总数</div>
-            <div class="summary-sub">正常 {{ equipmentStats.normalCount }}，故障 {{ equipmentStats.faultCount }}</div>
+            <div class="summary-sub">
+              正常 {{ equipmentStats.normalCount }}，故障 {{ equipmentStats.faultCount }}
+            </div>
           </div>
         </div>
       </el-col>
@@ -63,7 +71,9 @@
           <div>
             <div class="summary-value">{{ repairStats.totalCount }}</div>
             <div class="summary-label">维修工单</div>
-            <div class="summary-sub">AI {{ repairStats.aiCreatedCount }}，人工 {{ repairStats.manualCreatedCount }}</div>
+            <div class="summary-sub">
+              AI {{ repairStats.aiCreatedCount }}，人工 {{ repairStats.manualCreatedCount }}
+            </div>
           </div>
         </div>
       </el-col>
@@ -109,7 +119,11 @@
                 <strong>{{ item.value }}</strong>
               </div>
               <div class="status-track">
-                <div class="status-fill" :class="item.className" :style="{ width: `${item.percent}%` }"></div>
+                <div
+                  class="status-fill"
+                  :class="item.className"
+                  :style="{ width: `${item.percent}%` }"
+                ></div>
               </div>
             </div>
           </div>
@@ -125,7 +139,9 @@
               <span>生产趋势</span>
               <div class="header-tags">
                 <el-tag type="success">总产量 {{ productionStats.totalOutput }}</el-tag>
-                <el-tag type="success" effect="plain">合格率 {{ formatPercent(productionStats.qualificationRate) }}</el-tag>
+                <el-tag type="success" effect="plain"
+                  >合格率 {{ formatPercent(productionStats.qualificationRate) }}</el-tag
+                >
               </div>
             </div>
           </template>
@@ -182,7 +198,9 @@
       <template #header>
         <div class="panel-head">
           <span>实时设备快照</span>
-          <el-tag type="success" v-if="realtime.lastUpdated">更新时间：{{ realtime.lastUpdated }}</el-tag>
+          <el-tag type="success" v-if="realtime.lastUpdated"
+            >更新时间：{{ realtime.lastUpdated }}</el-tag
+          >
           <el-tag type="info" v-else>等待实时数据</el-tag>
         </div>
       </template>
@@ -230,7 +248,6 @@ import {
   getProductionStats,
   getRepairStats,
   type DashboardRange,
-  type TrendItem,
 } from '@/api/dashboard'
 import { onDashboardPush, type DashboardDeviceValue, type DashboardPushData } from '@/utils/alarmWs'
 import { Histogram, Monitor, Tools, WarningFilled } from '@element-plus/icons-vue'
@@ -397,7 +414,12 @@ function normalizeAlarmStats(payload: unknown) {
 
 function normalizeProductionStats(payload: unknown) {
   const source = isRecord(payload) ? payload : {}
-  const totalActualQty = pickNumber(source, ['totalActualQty', 'totalOutput', 'output', 'productionCount'])
+  const totalActualQty = pickNumber(source, [
+    'totalActualQty',
+    'totalOutput',
+    'output',
+    'productionCount',
+  ])
   const totalBadQty = pickNumber(source, ['totalBadQty', 'badQty', 'defectCount'])
   const qualifiedOutput = pickNumber(
     source,
@@ -407,7 +429,12 @@ function normalizeProductionStats(payload: unknown) {
   productionStats.value = {
     totalOutput: totalActualQty,
     qualifiedOutput,
-    qualificationRate: pickNumber(source, ['qualificationRate', 'passRate', 'qualifiedRate', 'yieldRate']),
+    qualificationRate: pickNumber(source, [
+      'qualificationRate',
+      'passRate',
+      'qualifiedRate',
+      'yieldRate',
+    ]),
   }
   productionTrend.value = normalizeTrend(
     pickArray(source, ['dailyTrend', 'trend', 'items', 'details']),
@@ -433,8 +460,17 @@ function normalizeRepairStats(payload: unknown) {
     pendingCount: pickNumber(source, ['pendingCount', 'todoCount', 'waitingCount']),
     processingCount: pickNumber(source, ['processingCount', 'repairingCount', 'inProgressCount']),
     completedCount: pickNumber(source, ['completedCount', 'doneCount', 'finishedCount']),
-    aiCreatedCount: pickNumber(source, ['aiCreatedCount', 'aiCount', 'autoCreatedCount', 'aiTriggeredCount']),
-    manualCreatedCount: pickNumber(source, ['manualCreatedCount', 'manualCount', 'humanCreatedCount']),
+    aiCreatedCount: pickNumber(source, [
+      'aiCreatedCount',
+      'aiCount',
+      'autoCreatedCount',
+      'aiTriggeredCount',
+    ]),
+    manualCreatedCount: pickNumber(source, [
+      'manualCreatedCount',
+      'manualCount',
+      'humanCreatedCount',
+    ]),
   }
 }
 
@@ -508,7 +544,7 @@ async function loadDashboardStats() {
 
 function updateDashboardRealtime(data: DashboardPushData) {
   realtime.value = {
-    productionCount: data.productionCount,
+    productionCount: Number(data.todayTotalQty ?? data.productionCount ?? 0),
     devices: data.devices,
     lastUpdated: formatTimestamp(data.timestamp),
   }

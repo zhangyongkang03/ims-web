@@ -59,12 +59,15 @@ service.interceptors.request.use(
 service.interceptors.response.use(
   (response: any) => {
     const res = response.data
+    const config = (response.config || {}) as ApiRequestConfig
 
     // code为1表示成功
     if (res.code === 1) {
       return res
     } else {
-      ElMessage.error(res.msg || '请求失败')
+      if (!config.skipErrorMessage) {
+        ElMessage.error(res.msg || '请求失败')
+      }
       return Promise.reject(new Error(res.msg || '请求失败'))
     }
   },

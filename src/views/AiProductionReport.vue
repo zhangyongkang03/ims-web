@@ -814,7 +814,7 @@ function goBatchQuality(batchNo: string) {
 
   router.push({
     name: 'BatchQualityReport',
-    query: { batchNo: normalizedBatchNo },
+    query: { batchNo: normalizedBatchNo, from: 'production-report' },
   })
 }
 

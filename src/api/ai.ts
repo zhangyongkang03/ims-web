@@ -195,10 +195,12 @@ export type FailureTrend = 'DETERIORATING' | 'STABLE' | 'IMPROVING' | string
 export type FailureRiskLevel = 'HIGH' | 'MEDIUM' | 'LOW' | string
 
 export interface FailurePredictionItem {
-  deviceCode: string
+  deviceCode?: string
   deviceType?: string
   equipCode?: string
   equipName?: string
+  sensorCount?: number
+  sensorTypes?: string[]
   trend?: FailureTrend
   riskScoreTrend?: number[]
   alarmCountTrend?: number[]
@@ -217,6 +219,8 @@ export interface FailurePredictionReport {
   generateTime?: string
   totalDevices?: number
   warningDevices?: number
+  totalEquipments?: number
+  warningEquipments?: number
   predictions: FailurePredictionItem[]
   aiOverview?: string
 }
@@ -260,11 +264,8 @@ export function triggerAiAnalyze(data: AiAnalyzeRequest) {
   return request.post<ApiResponse<AiAnalysisResult>>('/ai/analyze', data)
 }
 
-export function getAiLatest(deviceCode: string) {
-  return getWithFallback<ApiResponse<AiAnalysisResult>>([
-    `/ai-decision/latest/${deviceCode}`,
-    `/ai/latest/${deviceCode}`,
-  ])
+export function getAiLatest(deviceCode: string, config?: ApiRequestConfig) {
+  return request.get<ApiResponse<AiAnalysisResult>>(`/ai/latest/${deviceCode}`, config)
 }
 
 export function getAiHistory(params: {

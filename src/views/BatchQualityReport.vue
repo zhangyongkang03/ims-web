@@ -7,15 +7,11 @@
             <span>批次质量分析报告</span>
             <el-tag v-if="currentBatchNo" type="info">批次 {{ currentBatchNo }}</el-tag>
           </div>
-          <el-button
-            v-if="currentBatchNo"
-            type="primary"
-            plain
-            :loading="rootCauseLoading"
-            @click="handleLoadRootCause"
-          >
-            根因分析
-          </el-button>
+          <div class="header-actions">
+            <el-button v-if="showBackButton" plain @click="handleBack">
+              {{ backButtonText }}
+            </el-button>
+          </div>
         </div>
       </template>
 
@@ -93,8 +89,9 @@
             <el-descriptions-item label="综合CPK">{{
               formatNumber(basicInfo.overallCpk)
             }}</el-descriptions-item>
-            <el-descriptions-item label="CPK达标/不达标">
+            <el-descriptions-item label="CPK达标/良/不达标">
               {{ formatNumber(basicInfo.cpkPassCount) }} /
+              {{ formatNumber(basicInfo.cpkGoodCount) }} /
               {{ formatNumber(basicInfo.cpkFailCount) }}
             </el-descriptions-item>
             <el-descriptions-item label="最佳/最差设备">
@@ -136,7 +133,7 @@
 
           <el-empty
             v-if="!rootCauseReport"
-            description="点击“根因分析”后查看批次不良品根因结果"
+            description="正在加载批次不良品根因结果"
             :image-size="60"
           />
 
@@ -389,9 +386,10 @@ import {
 } from '@/api/batchQuality'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
+const router = useRouter()
 const RETRY_INTERVAL_MS = 3000
 const MAX_RETRY_COUNT = 2
 
@@ -411,6 +409,9 @@ const searchForm = reactive({
 })
 
 const currentBatchNo = computed(() => searchForm.batchNo.trim())
+const fromProductionReport = computed(() => String(route.query.from || '') === 'production-report')
+const showBackButton = computed(() => fromProductionReport.value || window.history.length > 1)
+const backButtonText = computed(() => (fromProductionReport.value ? '返回生产报告' : '返回上一页'))
 
 const basicInfo = computed<BatchQualityBasicInfo>(() => {
   const source = (report.value?.basicInfo || {}) as BatchQualityBasicInfo
@@ -427,6 +428,7 @@ const basicInfo = computed<BatchQualityBasicInfo>(() => {
     durationMinutes: source.durationMinutes,
     overallCpk: source.overallCpk,
     cpkPassCount: source.cpkPassCount,
+    cpkGoodCount: source.cpkGoodCount,
     cpkFailCount: source.cpkFailCount,
     bestStationCode: source.bestStationCode,
     worstStationCode: source.worstStationCode,
@@ -725,6 +727,7 @@ const sanitizeReport = (raw: BatchQualityReportRaw | BatchQualityReport): BatchQ
         durationMinutes: toNumber(reportRaw.durationMinutes),
         overallCpk: toNumber(reportRaw.overallCpk),
         cpkPassCount: toNumber(reportRaw.cpkPassCount),
+        cpkGoodCount: toNumber(reportRaw.cpkGoodCount),
         cpkFailCount: toNumber(reportRaw.cpkFailCount),
         bestStationCode: reportRaw.bestStationCode,
         worstStationCode: reportRaw.worstStationCode,
@@ -771,6 +774,7 @@ const sanitizeReport = (raw: BatchQualityReportRaw | BatchQualityReport): BatchQ
       durationMinutes: basic.durationMinutes,
       overallCpk: basic.overallCpk,
       cpkPassCount: basic.cpkPassCount,
+      cpkGoodCount: basic.cpkGoodCount,
       cpkFailCount: basic.cpkFailCount,
       bestStationCode: basic.bestStationCode,
       worstStationCode: basic.worstStationCode,
@@ -835,6 +839,30 @@ const loadReport = async (batchNo: string, retryCount = 0) => {
   return loadReport(normalizedBatchNo, retryCount + 1)
 }
 
+const loadRootCauseReport = async (batchNo: string, options?: { silentSuccess?: boolean }) => {
+  const normalizedBatchNo = batchNo.trim()
+  if (!normalizedBatchNo) {
+    rootCauseReport.value = null
+    return false
+  }
+
+  rootCauseLoading.value = true
+  try {
+    const res = await getDefectRootCause(normalizedBatchNo)
+    rootCauseReport.value = res.data || null
+    if (!options?.silentSuccess) {
+      ElMessage.success('根因分析加载成功')
+    }
+    return true
+  } catch (error) {
+    rootCauseReport.value = null
+    ElMessage.error(error instanceof Error ? error.message : '根因分析加载失败')
+    return false
+  } finally {
+    rootCauseLoading.value = false
+  }
+}
+
 const loadCurrentBatchReport = async (batchNo: string) => {
   const normalizedBatchNo = batchNo.trim()
   searchForm.batchNo = normalizedBatchNo
@@ -846,32 +874,14 @@ const loadCurrentBatchReport = async (batchNo: string) => {
   loading.value = true
   try {
     const loaded = await loadReport(normalizedBatchNo)
-    if (!loaded) {
+    if (loaded) {
+      await loadRootCauseReport(normalizedBatchNo, { silentSuccess: true })
+    } else {
       ElMessage.info('报告可能仍在生成中，请稍后刷新')
     }
   } finally {
     loading.value = false
     loadingMessage.value = '正在查询批次质量报告...'
-  }
-}
-
-const handleLoadRootCause = async () => {
-  const batchNo = currentBatchNo.value
-  if (!batchNo) {
-    ElMessage.warning('当前批次号为空，无法执行根因分析')
-    return
-  }
-
-  rootCauseLoading.value = true
-  try {
-    const res = await getDefectRootCause(batchNo)
-    rootCauseReport.value = res.data || null
-    ElMessage.success('根因分析加载成功')
-  } catch (error) {
-    rootCauseReport.value = null
-    ElMessage.error(error instanceof Error ? error.message : '根因分析加载失败')
-  } finally {
-    rootCauseLoading.value = false
   }
 }
 
@@ -894,6 +904,20 @@ const openTimeSeries = async (row: BatchStationStat) => {
   } finally {
     timeSeriesLoading.value = false
   }
+}
+
+const handleBack = () => {
+  if (fromProductionReport.value) {
+    router.push({ name: 'AiProductionReport' })
+    return
+  }
+
+  if (window.history.length > 1) {
+    router.back()
+    return
+  }
+
+  router.push({ name: 'AiProductionReport' })
 }
 
 onMounted(async () => {
@@ -924,6 +948,12 @@ watch(
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .title-wrap {

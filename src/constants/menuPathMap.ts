@@ -12,7 +12,7 @@ export const backendToFrontendPathMap: Record<string, string> = {
   '/basic/alarm': '/base/alarm',
   '/basic/warehouse': '/base/wms',
   '/ai/chat': '/ai/chat',
-  '/ai/monitor': '/ai/dashboard',
+  '/ai/monitor': '/dashboard',
   '/ai/decision-log': '/ai/decisions',
   '/ai/knowledge': '/ai/knowledge',
   '/ai/rules': '/ai/rules',

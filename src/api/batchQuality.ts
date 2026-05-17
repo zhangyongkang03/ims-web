@@ -14,6 +14,7 @@ export interface BatchQualityBasicInfo {
   durationMinutes?: number
   overallCpk?: number
   cpkPassCount?: number
+  cpkGoodCount?: number
   cpkFailCount?: number
   bestStationCode?: string
   worstStationCode?: string
@@ -105,6 +106,7 @@ export interface BatchQualityReportRaw {
   durationMinutes?: number
   overallCpk?: number
   cpkPassCount?: number
+  cpkGoodCount?: number
   cpkFailCount?: number
   bestStationCode?: string
   worstStationCode?: string
