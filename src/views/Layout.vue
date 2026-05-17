@@ -101,8 +101,8 @@ const AI_MENU_PATH = '/ai'
 const SHIFT_MENU_PATH = '/basic/shift'
 const WAREHOUSE_MENU_PATH = '/basic/warehouse'
 const ALARM_MENU_PATH = '/basic/alarm'
-const BASIC_MANAGEMENT_MENU_PATH = '/management/basic'
-const LOG_MANAGEMENT_MENU_PATH = '/management/log'
+const BASIC_MANAGEMENT_MENU_PATH = '/basic'
+const LOG_MANAGEMENT_MENU_PATH = '/log'
 const AI_PRODUCTION_REPORT_PATH = '/ai/production-report'
 const AI_KNOWLEDGE_PATH = '/ai/knowledge'
 const AI_RULES_PATH = '/ai/rules'
@@ -338,17 +338,32 @@ const activeMenu = computed(() => {
   if (route.path.startsWith('/base/wms/')) {
     return '/base/wms'
   }
+  if (route.path.startsWith('/stock/warehouse-location/')) {
+    return '/stock/warehouse-location'
+  }
+  if (route.path.startsWith('/inventory-management/warehouse-location/')) {
+    return '/stock/warehouse-location'
+  }
   if (route.path.startsWith('/material/stock/distribution/')) {
-    return '/material/stock'
+    return '/stock/material'
   }
   if (route.path.startsWith('/stock/product/distribution/')) {
     return '/stock/product'
   }
+  if (route.path.startsWith('/order/craft/')) {
+    return '/order/craft'
+  }
+  if (route.path.startsWith('/order/recipe/')) {
+    return '/order/recipe'
+  }
   if (route.path.startsWith('/equipment/device/')) {
     return '/equipment/device'
   }
-  if (route.path.startsWith('/material/lot') || route.path.startsWith('/material/stock')) {
+  if (route.path.startsWith('/material/lot')) {
     return '/material/stock'
+  }
+  if (route.path.startsWith('/material/stock')) {
+    return '/stock/material'
   }
   return route.path
 })
@@ -359,31 +374,63 @@ const currentRoute = computed(() => {
     '/system/user': '用户管理',
     '/system/role': '角色管理',
     '/system/menu': '菜单管理',
+    '/system/dict': '字典管理',
     '/system/dict-type': '字典管理',
-    '/material/material': '物料信息',
+    '/material': '物料信息',
+    '/material-management': '物料信息',
     '/material/supplier': '供应商管理',
+    '/material-management/supplier': '供应商管理',
     '/material/customer': '客户管理',
+    '/material-management/customer': '客户管理',
+    '/material/product': '产品管理',
+    '/material-management/product': '产品管理',
+    '/stock/material': '材料库存',
+    '/inventory-management/material-stock': '材料库存',
+    '/stock/product': '产成品库存',
+    '/inventory-management/product-stock': '产成品库存',
+    '/stock/warehouse-location': '仓库与库位管理',
+    '/inventory-management/warehouse-location': '仓库与库位管理',
+    '/order/order': '工单管理',
+    '/work-order-management/list': '工单管理',
+    '/order/craft': '工艺管理',
+    '/work-order-management/craft': '工艺管理',
+    '/craft/craft': '工艺管理',
+    '/order/recipe': '配方管理',
+    '/work-order-management/recipe': '配方管理',
+    '/equipment/station': '工位管理',
+    '/equipment-management/station': '工位管理',
+    '/equipment/list': '生产设备管理',
+    '/equipment-management/list': '生产设备管理',
+    '/equipment/sensor': '传感器管理',
+    '/equipment-management/sensor': '传感器管理',
+    '/equipment/repair-order': '维修工单管理',
+    '/equipment-management/repair-order': '维修工单管理',
+    '/ai/chat': 'AI智能问答',
+    '/ai/assistant/chat': 'AI智能问答',
+    '/ai/production-report': '产品生产报告',
+    '/ai/assistant/production-report': '产品生产报告',
+    '/ai/device-report': '设备运行报告',
+    '/ai/assistant/device-report': '设备运行报告',
+    '/ai/traceability': '全流程溯源',
+    '/ai/assistant/traceability': '全流程溯源',
+    '/ai/batch-quality': '批次质量报告',
+    '/ai/assistant/batch-quality': '批次质量报告',
+    '/material/material': '物料信息',
     '/material/lot': '材料入库',
     '/material/lot/register': '材料登记',
-    '/material/product': '产品管理',
     '/material/stock': '材料库存',
-    '/stock/product': '产成品库存',
     '/base/recipe': '配方管理',
-    '/base/alarm': '异常报警',
+    '/log/alarm': '异常报警',
+    '/management/log/alarm': '异常报警',
+    '/log/decisions': '决策日志',
+    '/management/log/decisions': '决策日志',
     '/base/wms': '仓库与库位管理',
-    '/order/order': '工单管理',
     '/equipment/equipment': '生产设备管理',
-    '/equipment/station': '工位管理',
     '/equipment/device': '传感器管理',
-    '/equipment/repair-order': '维修工单管理',
-    '/ai/chat': 'AI智能问答',
-    '/ai/decisions': '决策日志',
-    '/ai/knowledge': '知识库管理',
-    '/ai/rules': '规则配置',
-    '/ai/batch-quality': '批次质量报告',
-    '/ai/production-report': '产品生产报告',
-    '/ai/traceability': '全流程溯源',
-    '/ai/device-report': '设备运行报告',
+    '/basic/knowledge': '知识库管理',
+    '/management/basic/knowledge': '知识库管理',
+    '/basic/rules': '规则配置',
+    '/management/basic/rules': '规则配置',
     '/ai/failure-prediction': '设备故障预测',
   }
   if (route.path.startsWith('/base/wms/')) {
@@ -395,7 +442,10 @@ const currentRoute = computed(() => {
   if (route.path.startsWith('/stock/product/distribution/')) {
     return '产成品库存分布'
   }
-  if (route.path.startsWith('/equipment/device/')) {
+  if (route.path.startsWith('/equipment-management/sensor/')) {
+    return '传感器管理'
+  }
+  if (route.path.startsWith('/equipment/sensor/')) {
     return '传感器管理'
   }
 

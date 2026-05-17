@@ -102,6 +102,137 @@ const router = createRouter({
           name: 'MenuManagement',
           component: () => import('@/views/MenuManagement.vue'),
         },
+        {
+          path: 'material',
+          component: () => import('@/views/MaterialManagement.vue'),
+        },
+        {
+          path: 'material-management',
+          redirect: '/material',
+        },
+        {
+          path: 'material/supplier',
+          component: () => import('@/views/SupplierManagement.vue'),
+        },
+        {
+          path: 'material-management/supplier',
+          redirect: '/material/supplier',
+        },
+        {
+          path: 'material/customer',
+          component: () => import('@/views/CustomerManagement.vue'),
+        },
+        {
+          path: 'material-management/customer',
+          redirect: '/material/customer',
+        },
+        {
+          path: 'material/product',
+          component: () => import('@/views/ProductManagement.vue'),
+        },
+        {
+          path: 'material-management/product',
+          redirect: '/material/product',
+        },
+        {
+          path: 'stock/material',
+          component: () => import('@/views/MaterialStockManagement.vue'),
+        },
+        {
+          path: 'inventory-management/material-stock',
+          redirect: '/stock/material',
+        },
+        {
+          path: 'material/stock',
+          redirect: '/stock/material',
+        },
+        {
+          path: 'stock/product',
+          component: () => import('@/views/ProductStockManagement.vue'),
+        },
+        {
+          path: 'inventory-management/product-stock',
+          redirect: '/stock/product',
+        },
+        {
+          path: 'stock/warehouse-location',
+          component: () => import('@/views/WmsManagement.vue'),
+        },
+        {
+          path: 'base/wms',
+          redirect: '/stock/warehouse-location',
+        },
+        {
+          path: 'inventory-management/warehouse-location',
+          redirect: '/stock/warehouse-location',
+        },
+        {
+          path: 'stock/warehouse-location/:whId/locations',
+          component: () => import('@/views/WarehouseLocationManagement.vue'),
+        },
+        {
+          path: 'base/wms/:whId/locations',
+          redirect: (to) => ({ path: `/stock/warehouse-location/${to.params.whId}/locations` }),
+        },
+        {
+          path: 'inventory-management/warehouse-location/:whId/locations',
+          redirect: (to) => ({ path: `/stock/warehouse-location/${to.params.whId}/locations` }),
+        },
+        {
+          path: 'work-order-management/list',
+          redirect: '/order/order',
+        },
+        {
+          path: 'work-order-management/craft',
+          redirect: '/order/craft',
+        },
+        {
+          path: 'work-order-management/recipe',
+          redirect: '/order/recipe',
+        },
+        {
+          path: 'equipment/station',
+          component: () => import('@/views/StationManagement.vue'),
+        },
+        {
+          path: 'equipment-management/station',
+          redirect: '/equipment/station',
+        },
+        {
+          path: 'equipment/list',
+          component: () => import('@/views/EquipmentManagement.vue'),
+        },
+        {
+          path: 'equipment-management/list',
+          redirect: '/equipment/list',
+        },
+        {
+          path: 'equipment/sensor/:stationId?',
+          component: () => import('@/views/DeviceManagement.vue'),
+        },
+        {
+          path: 'equipment-management/sensor/:stationId?',
+          redirect: (to) => ({
+            path: `/equipment/sensor/${to.params.stationId ?? ''}`.replace(/\/$/, ''),
+          }),
+        },
+        {
+          path: 'equipment/repair-order',
+          component: () => import('@/views/RepairOrderManagement.vue'),
+        },
+        {
+          path: 'equipment-management/repair-order',
+          redirect: '/equipment/repair-order',
+        },
+        {
+          path: 'ai/chat',
+          name: 'AiChat',
+          component: () => import('@/views/AiChat.vue'),
+        },
+        {
+          path: 'ai/assistant/chat',
+          redirect: '/ai/chat',
+        },
         // 物料模块
         {
           path: 'material/material',
@@ -134,64 +265,67 @@ const router = createRouter({
           component: () => import('@/views/ProductManagement.vue'),
         },
         {
-          path: 'material/stock',
-          name: 'MaterialStockManagement',
-          component: () => import('@/views/MaterialStockManagement.vue'),
-        },
-        {
           path: 'material/stock/distribution/:itemId',
           name: 'MaterialStockDistribution',
           component: () => import('@/views/MaterialStockDistribution.vue'),
-        },
-        {
-          path: 'stock/product',
-          name: 'ProductStockManagement',
-          component: () => import('@/views/ProductStockManagement.vue'),
         },
         {
           path: 'stock/product/distribution/:itemId',
           name: 'ProductStockDistribution',
           component: () => import('@/views/ProductStockDistribution.vue'),
         },
+        {
+          path: 'material/stock',
+          name: 'MaterialStockManagementLegacy',
+          redirect: '/stock/material',
+        },
+        {
+          path: 'base/wms/:whId/locations',
+          name: 'WarehouseLocationManagementLegacy',
+          redirect: (to) => ({ path: `/stock/warehouse-location/${to.params.whId}/locations` }),
+        },
         // 基础模块
         {
           path: 'base/recipe',
-          name: 'RecipeManagement',
-          component: () => import('@/views/RecipeManagement.vue'),
+          redirect: '/order/recipe',
         },
         {
           path: 'base/recipe/:recipeId/detail',
-          name: 'RecipeDetailManagement',
-          component: () => import('@/views/RecipeDetailManagement.vue'),
+          redirect: (to) => ({ path: `/order/recipe/${to.params.recipeId}/detail` }),
         },
         {
           path: 'base/alarm',
+          redirect: '/log/alarm',
+        },
+        {
+          path: 'log/alarm',
           name: 'AlarmManagement',
           component: () => import('@/views/AlarmManagement.vue'),
         },
-        // AI辅助决策模块
-        {
-          path: 'ai/dashboard',
-          name: 'AiDashboardLegacy',
-          redirect: '/dashboard',
-        },
-        {
-          path: 'ai/chat',
-          name: 'AiChat',
-          component: () => import('@/views/AiChat.vue'),
-        },
         {
           path: 'ai/decisions',
+          redirect: '/log/decisions',
+        },
+        {
+          path: 'log/decisions',
           name: 'AiDecisions',
           component: () => import('@/views/AiDecisions.vue'),
         },
         {
           path: 'ai/knowledge',
+          redirect: '/basic/knowledge',
+        },
+        {
+          path: 'basic/knowledge',
           name: 'AiKnowledge',
           component: () => import('@/views/AiKnowledge.vue'),
         },
         {
           path: 'ai/rules',
+          redirect: '/basic/rules',
+        },
+        {
+          path: 'basic/rules',
           name: 'AiRules',
           component: () => import('@/views/AiRules.vue'),
         },
@@ -201,14 +335,26 @@ const router = createRouter({
           component: () => import('@/views/BatchQualityReport.vue'),
         },
         {
+          path: 'ai/assistant/batch-quality',
+          redirect: '/ai/batch-quality',
+        },
+        {
           path: 'ai/production-report',
           name: 'AiProductionReport',
           component: () => import('@/views/AiProductionReport.vue'),
         },
         {
+          path: 'ai/assistant/production-report',
+          redirect: '/ai/production-report',
+        },
+        {
           path: 'ai/device-report',
           name: 'AiDeviceReport',
           component: () => import('@/views/AiDeviceReport.vue'),
+        },
+        {
+          path: 'ai/assistant/device-report',
+          redirect: '/ai/device-report',
         },
         {
           path: 'ai/failure-prediction',
@@ -219,6 +365,10 @@ const router = createRouter({
           path: 'ai/traceability',
           name: 'AiTraceability',
           component: () => import('@/views/AiTraceability.vue'),
+        },
+        {
+          path: 'ai/assistant/traceability',
+          redirect: '/ai/traceability',
         },
         {
           path: 'base/wms',
@@ -233,19 +383,37 @@ const router = createRouter({
         // 工艺模块
         {
           path: 'craft/craft',
-          name: 'CraftManagement',
-          component: () => import('@/views/CraftManagement.vue'),
+          redirect: '/order/craft',
         },
         {
           path: 'craft/craft/:craftId/detail',
-          name: 'CraftDetailManagement',
-          component: () => import('@/views/CraftDetailManagement.vue'),
+          redirect: (to) => ({ path: `/order/craft/${to.params.craftId}/detail` }),
         },
         // 工单模块
         {
           path: 'order/order',
           name: 'OrderManagement',
           component: () => import('@/views/WorkOrderManagement.vue'),
+        },
+        {
+          path: 'order/craft',
+          name: 'CraftManagement',
+          component: () => import('@/views/CraftManagement.vue'),
+        },
+        {
+          path: 'order/craft/:craftId/detail',
+          name: 'CraftDetailManagement',
+          component: () => import('@/views/CraftDetailManagement.vue'),
+        },
+        {
+          path: 'order/recipe',
+          name: 'RecipeManagement',
+          component: () => import('@/views/RecipeManagement.vue'),
+        },
+        {
+          path: 'order/recipe/:recipeId/detail',
+          name: 'RecipeDetailManagement',
+          component: () => import('@/views/RecipeDetailManagement.vue'),
         },
         {
           path: 'order/work-order',
@@ -259,35 +427,27 @@ const router = createRouter({
         },
         // 字典模块
         {
-          path: 'system/dict-type',
+          path: 'system/dict',
           name: 'DictTypeManagement',
           component: () => import('@/views/DictTypeManagement.vue'),
         },
         {
-          path: 'system/dict-type/:dictType/data',
+          path: 'system/dict/:dictType/data',
           name: 'DictDataManagement',
           component: () => import('@/views/DictDataManagement.vue'),
         },
         // 设备模块
         {
-          path: 'equipment/station',
-          name: 'StationManagement',
-          component: () => import('@/views/StationManagement.vue'),
-        },
-        {
           path: 'equipment/equipment',
-          name: 'EquipmentManagement',
-          component: () => import('@/views/EquipmentManagement.vue'),
+          name: 'EquipmentManagementLegacy',
+          redirect: '/equipment/list',
         },
         {
           path: 'equipment/device/:stationId?',
-          name: 'DeviceManagement',
-          component: () => import('@/views/DeviceManagement.vue'),
-        },
-        {
-          path: 'equipment/repair-order',
-          name: 'RepairOrderManagement',
-          component: () => import('@/views/RepairOrderManagement.vue'),
+          name: 'DeviceManagementLegacy',
+          redirect: (to) => ({
+            path: `/equipment/sensor/${to.params.stationId ?? ''}`.replace(/\/$/, ''),
+          }),
         },
       ],
     },
