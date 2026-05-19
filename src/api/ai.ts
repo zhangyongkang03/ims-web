@@ -67,12 +67,12 @@ export interface PageResult<T> {
 }
 
 export interface AiDecisionRecord {
-  decisionId: number
+  decisionId: string
   refDeviceCode: string
   decisionType: DecisionType
   riskLevel: string
   suggestionContent: string
-  isAdopted: 0 | 1 | 2
+  isAdopted: number
   createTime: string
 }
 
@@ -291,7 +291,7 @@ export function getAiDecisions(params: {
   return request.get<ApiResponse<PageResult<AiDecisionRecord>>>('/ai/decisions', { params })
 }
 
-export function submitAiDecisionFeedback(decisionId: number, data: AiDecisionFeedbackForm) {
+export function submitAiDecisionFeedback(decisionId: string | number, data: AiDecisionFeedbackForm) {
   return request.post<ApiResponse<null>>(`/ai/decisions/${decisionId}/feedback`, data)
 }
 

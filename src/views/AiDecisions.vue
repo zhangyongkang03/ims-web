@@ -29,7 +29,6 @@
       </div>
 
       <el-table :data="tableData" stripe v-loading="loading" style="width: 100%">
-        <el-table-column prop="decisionId" label="ID" width="80" />
         <el-table-column prop="refDeviceCode" label="设备编码" width="140" />
         <el-table-column prop="decisionType" label="决策类型" width="120">
           <template #default="{ row }">
@@ -47,11 +46,7 @@
           min-width="300"
           show-overflow-tooltip
         />
-        <el-table-column prop="isAdopted" label="状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="adoptedTag(row.isAdopted)">{{ adoptedLabel(row.isAdopted) }}</el-tag>
-          </template>
-        </el-table-column>
+        <el-table-column prop="isAdopted" label="权重" width="100" align="center" />
         <el-table-column prop="createTime" label="时间" width="180" />
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
@@ -124,18 +119,6 @@ const riskLevelTag = (level: string) => {
   if (level?.includes('高')) return 'danger'
   if (level?.includes('中')) return 'warning'
   return 'success'
-}
-
-const adoptedTag = (val: number) => {
-  if (val === 1) return 'success'
-  if (val === 2) return 'warning'
-  return 'info'
-}
-
-const adoptedLabel = (val: number) => {
-  if (val === 1) return '已采纳'
-  if (val === 2) return '已忽略'
-  return '未处理'
 }
 
 const getList = async () => {
