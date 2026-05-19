@@ -291,7 +291,10 @@ export function getAiDecisions(params: {
   return request.get<ApiResponse<PageResult<AiDecisionRecord>>>('/ai/decisions', { params })
 }
 
-export function submitAiDecisionFeedback(decisionId: string | number, data: AiDecisionFeedbackForm) {
+export function submitAiDecisionFeedback(
+  decisionId: string | number,
+  data: AiDecisionFeedbackForm,
+) {
   return request.post<ApiResponse<null>>(`/ai/decisions/${decisionId}/feedback`, data)
 }
 
