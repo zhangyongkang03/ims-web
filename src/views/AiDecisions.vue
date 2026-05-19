@@ -46,7 +46,6 @@
           min-width="300"
           show-overflow-tooltip
         />
-        <el-table-column prop="isAdopted" label="权重" width="100" align="center" />
         <el-table-column prop="createTime" label="时间" width="180" />
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
@@ -74,16 +73,19 @@
         </el-table-column>
       </el-table>
 
-      <el-pagination
-        v-model:current-page="pagination.pageNum"
-        v-model:page-size="pagination.pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="pagination.total"
-        :hide-on-single-page="false"
-        layout="total, sizes, prev, pager, next, jumper"
-        class="pagination"
-        @change="getList"
-      />
+      <div class="pagination-container">
+        <el-pagination
+          v-model:current-page="pagination.pageNum"
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="pagination.total"
+          :hide-on-single-page="false"
+          layout="total, sizes, prev, pager, next, jumper"
+          class="pagination"
+          @current-change="handlePageChange"
+          @size-change="handlePageSizeChange"
+        />
+      </div>
     </el-card>
   </div>
 </template>
@@ -130,8 +132,10 @@ const getList = async () => {
       deviceCode: searchForm.deviceCode || undefined,
       decisionType: searchForm.decisionType || undefined,
     })
-    tableData.value = res.data.records
-    pagination.total = res.data.total
+    tableData.value = res.data.records || []
+    pagination.pageNum = Number(res.data.pageNum || pagination.pageNum)
+    pagination.pageSize = Number(res.data.pageSize || pagination.pageSize)
+    pagination.total = Number(res.data.total || 0)
   } finally {
     loading.value = false
   }
@@ -145,6 +149,17 @@ const handleSearch = () => {
 const handleReset = () => {
   searchForm.deviceCode = ''
   searchForm.decisionType = undefined
+  pagination.pageNum = 1
+  getList()
+}
+
+const handlePageChange = (pageNum: number) => {
+  pagination.pageNum = pageNum
+  getList()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  pagination.pageSize = pageSize
   pagination.pageNum = 1
   getList()
 }
@@ -202,8 +217,11 @@ onMounted(() => {
   width: 160px;
 }
 
-.pagination {
+.pagination-container {
   margin-top: 12px;
+}
+
+.pagination {
   justify-content: flex-end;
 }
 </style>

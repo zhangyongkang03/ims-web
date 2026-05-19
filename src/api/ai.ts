@@ -72,7 +72,7 @@ export interface AiDecisionRecord {
   decisionType: DecisionType
   riskLevel: string
   suggestionContent: string
-  isAdopted: number
+  isAdopted: 0 | 1 | 2
   createTime: string
 }
 

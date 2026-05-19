@@ -428,6 +428,7 @@ const STATS_REFRESH_INTERVAL = 60000
 const MIXING_WORKSHOP_CODE = 'MIXING_WORKSHOP'
 const REALTIME_HISTORY_WINDOW_MS = 60000
 const REALTIME_HISTORY_MAX_POINTS = 120
+const MIXING_SIGNAL_ACTIVE_WINDOW_MS = 15000
 const CURVE_WIDTH = 320
 const CURVE_HEIGHT = 120
 const CURVE_PADDING_X = 8
@@ -602,7 +603,6 @@ const showAiAnalysisPanel = computed(() => Boolean(mixingWorkshopAnalysis.value)
 const showActiveBatchPanel = computed(
   () => !showAiAnalysisPanel.value && Boolean(activeBatch.value),
 )
-const isIdleStatus = computed(() => dashboardSummary.value.currentStatus.includes('空闲'))
 const freezeRealtimeCurves = computed(() => !showAiAnalysisPanel.value && !activeBatch.value)
 const curveWindowLabel = computed(() =>
   freezeRealtimeCurves.value ? '最近一批次窗口' : '最近 60 秒',
@@ -725,6 +725,56 @@ const realtimeCurveCards = computed<RealtimeCurveCard[]>(() => {
       } as RealtimeCurveCard
     })
     .filter((item): item is RealtimeCurveCard => !!item)
+})
+
+const hasRecentMixingSignal = computed(() => {
+  const now = realtimeWindowClock.value
+
+  const hasRecentMixingFastRisk = Object.values(fastRiskMap.value).some((item) => {
+    const processType = String(item.processType || '').toUpperCase()
+    const batchNo = String(item.batchNo || '')
+      .trim()
+      .toUpperCase()
+    const timestamp = Number(item.timestamp || 0)
+    const isMixingSignal =
+      processType.includes('MIXING') ||
+      processType === 'BRIX' ||
+      processType === 'TEMP' ||
+      processType === 'PH' ||
+      batchNo.startsWith('MIX-')
+
+    return isMixingSignal && timestamp > 0 && now - timestamp <= MIXING_SIGNAL_ACTIVE_WINDOW_MS
+  })
+
+  if (hasRecentMixingFastRisk) return true
+
+  const analysis = mixingWorkshopAnalysis.value
+  if (!analysis?.batchNo) return false
+
+  const normalizedBatchNo = String(analysis.batchNo || '')
+    .trim()
+    .toUpperCase()
+  const analysisTimestamp = Date.parse(String(analysis.analysisTime || ''))
+
+  return (
+    normalizedBatchNo.startsWith('MIX-') &&
+    Number.isFinite(analysisTimestamp) &&
+    now - analysisTimestamp <= MIXING_SIGNAL_ACTIVE_WINDOW_MS
+  )
+})
+
+const hasRealtimeProductionData = computed(() => {
+  if (activeBatch.value?.batchNo) return true
+
+  if (hasRecentMixingSignal.value) return true
+
+  const currentBatchNo = String(dashboardSummary.value.currentBatchNo || '').trim()
+  return Boolean(currentBatchNo && currentBatchNo !== '—')
+})
+
+const isIdleStatus = computed(() => {
+  if (!dashboardSummary.value.currentStatus.includes('空闲')) return false
+  return !hasRealtimeProductionData.value
 })
 
 const cardList = computed<DashboardCardItem[]>(() => {
@@ -1278,19 +1328,31 @@ const upsertDashboardMetrics = (
   summary?: Partial<DashboardSummaryState>,
   batch?: ActiveBatchState | null,
 ) => {
-  dashboardMetricMap.value = {
-    ...dashboardMetricMap.value,
-    ...items,
-  }
+  const nextSummary = summary
+    ? {
+        ...dashboardSummary.value,
+        ...summary,
+      }
+    : dashboardSummary.value
+
+  const shouldClearRealtimeState =
+    nextSummary.currentStatus.includes('空闲') &&
+    !batch &&
+    (!nextSummary.currentBatchNo || nextSummary.currentBatchNo === '—') &&
+    Object.keys(items).length === 0
+
+  dashboardMetricMap.value = shouldClearRealtimeState ? {} : items
 
   if (summary) {
-    dashboardSummary.value = {
-      ...dashboardSummary.value,
-      ...summary,
-    }
+    dashboardSummary.value = nextSummary
   }
 
   activeBatch.value = batch || null
+
+  if (shouldClearRealtimeState) {
+    fastRiskMap.value = {}
+    realtimeHistoryMap.value = {}
+  }
 
   if (summary?.todayTotalQty !== undefined || summary?.todayYieldRate !== undefined) {
     productionStats.value = {

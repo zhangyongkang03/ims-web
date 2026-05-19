@@ -249,7 +249,13 @@ import {
   getRepairStats,
   type DashboardRange,
 } from '@/api/dashboard'
-import { onDashboardPush, type DashboardDeviceValue, type DashboardPushData } from '@/utils/alarmWs'
+import {
+  onDashboardPush,
+  onFastRiskPush,
+  type DashboardDeviceValue,
+  type DashboardPushData,
+  type FastRiskPushData,
+} from '@/utils/alarmWs'
 import { Histogram, Monitor, Tools, WarningFilled } from '@element-plus/icons-vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
@@ -321,6 +327,7 @@ const realtime = ref({
 })
 
 let stopDashboardListener: (() => void) | null = null
+let stopFastRiskListener: (() => void) | null = null
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null
@@ -376,6 +383,16 @@ function getCurrentValue(deviceValue: DashboardDeviceValue) {
 
   const fallbackMetric = Object.values(deviceValue).find((value) => typeof value === 'number')
   return typeof fallbackMetric === 'number' ? formatMetricValue(fallbackMetric) : '-'
+}
+
+function mergeRealtimeDevices(nextDevices: DashboardPushData['devices']) {
+  realtime.value = {
+    ...realtime.value,
+    devices: {
+      ...realtime.value.devices,
+      ...nextDevices,
+    },
+  }
 }
 
 function normalizeTrend(items: unknown[], valueKeys: string[], rateKeys?: string[]) {
@@ -543,9 +560,33 @@ async function loadDashboardStats() {
 }
 
 function updateDashboardRealtime(data: DashboardPushData) {
+  mergeRealtimeDevices(data.devices)
   realtime.value = {
-    productionCount: Number(data.todayTotalQty ?? data.productionCount ?? 0),
-    devices: data.devices,
+    ...realtime.value,
+    productionCount: Number(
+      data.todayTotalQty ?? data.productionCount ?? realtime.value.productionCount,
+    ),
+    lastUpdated: formatTimestamp(data.timestamp),
+  }
+}
+
+function updateFastRiskRealtime(data: FastRiskPushData) {
+  const currentDevice = realtime.value.devices[data.deviceCode]
+  const nextDevice = {
+    ...(typeof currentDevice === 'object' && currentDevice !== null ? currentDevice : {}),
+    deviceCode: data.deviceCode,
+    processType: data.processType || 'MIXING',
+    batchNo: data.batchNo || '-',
+    value: data.currentValue,
+    ts: data.timestamp,
+  }
+
+  mergeRealtimeDevices({
+    [data.deviceCode]: nextDevice,
+  })
+
+  realtime.value = {
+    ...realtime.value,
     lastUpdated: formatTimestamp(data.timestamp),
   }
 }
@@ -555,12 +596,19 @@ onMounted(async () => {
   stopDashboardListener = onDashboardPush((data) => {
     updateDashboardRealtime(data)
   })
+  stopFastRiskListener = onFastRiskPush((data) => {
+    updateFastRiskRealtime(data)
+  })
 })
 
 onBeforeUnmount(() => {
   if (stopDashboardListener) {
     stopDashboardListener()
     stopDashboardListener = null
+  }
+  if (stopFastRiskListener) {
+    stopFastRiskListener()
+    stopFastRiskListener = null
   }
 })
 </script>
